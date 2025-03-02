@@ -9,8 +9,7 @@ _start:
      * 只允許 CPU core 0 執行
      */
     mrs  x0, mpidr_el1       /* 讀取多核心處理器 ID 暫存器 */
-    hvc  #0
-    and  x0, x0, #0x3         /* 取出核心 ID (bits 0:1) */
+    and  x0, x0, #0xFF         /* 取出核心 ID (bits 0:1) */
     cmp  x0, #0               /* 比較核心 ID 是否為 0 */
     b.ne halt                 /* 如果核心 ID 不是 0，則跳到 halt 標籤 */
 

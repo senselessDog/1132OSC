@@ -6,7 +6,7 @@ SECTIONS
     . = 0x80000;
 
     .text.boot : {
-        *(.text.boot)
+        KEEP(*(text.boot))
     }
 
     .text : {
@@ -16,7 +16,7 @@ SECTIONS
     .data : {
         *(.data)
     }
-
+    . = ALIGN(8);  /* 確保BSS段對齊到8字節邊界 */
     .bss : {
         __bss_start = .;
         *(.bss)

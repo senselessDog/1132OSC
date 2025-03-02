@@ -9,8 +9,8 @@ TARGET = kernel8.img
 ELF_TARGET = kernel8.elf
 
 # 定義原始碼檔案
-SRCS = boot.S kernel.c
-#kernel.c uart.c mailbox.c
+SRCS = boot.S kernel.c uart.c strcmp.c 
+#  mailbox.c
 
 # 定義物件檔案
 # WARN
