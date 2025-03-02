@@ -18,6 +18,9 @@
 #define TAG_REQUEST_CODE 0x00000000
 #define END_TAG 0x00000000
 
+void uart_send_string(const char *str);
+void uart_send_hex(uint32_t value);
+
 int mailbox_call(uint32_t *mailbox)
 {
     uint32_t address = ((uint32_t)(uintptr_t)mailbox) & ~0xF;
@@ -39,15 +42,20 @@ int mailbox_call(uint32_t *mailbox)
 
         // Check if the response is for us
         if (*MAILBOX_READ == value)
+        {
+            uart_send_string("Get Mailbox response \r\n");
+            uart_send_hex(mailbox[1]);
+            uart_send_string("\r\n");
             return mailbox[1] == REQUEST_SUCCEED;
+        }
     }
 
-    return 0;
+    // return 0;
 }
 
 void get_board_revision()
 {
-    uint32_t mailbox[7] __attribute__((aligned(16)));
+    unsigned int mailbox[7];
     mailbox[0] = 7 * 4; // buffer size in bytes
     mailbox[1] = REQUEST_CODE;
     // tags begin

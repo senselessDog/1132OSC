@@ -79,3 +79,12 @@ void uart_send_string(const char *str)
         uart_send(str[i]);
     }
 }
+
+void uart_send_hex(uint32_t value)
+{
+    const char hex_chars[] = "0123456789ABCDEF";
+    for (int i = 28; i >= 0; i -= 4)
+    {
+        uart_send(hex_chars[(value >> i) & 0xF]);
+    }
+}
