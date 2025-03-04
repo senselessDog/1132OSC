@@ -50,6 +50,7 @@ void shell()
                 uart_send_string("Available commands:\r\n");
                 uart_send_string("help - print all available commands\r\n");
                 uart_send_string("hello - print Hello World!\r\n");
+                uart_send_string("modinfo - get board revision & ARM memory information\r\n");
                 uart_send_string("boardrev - get board revision\r\n");
                 uart_send_string("armmem - get ARM memory information\r\n");
                 uart_send_string("coreid - print current core ID\r\n");
@@ -57,6 +58,11 @@ void shell()
             else if (strcmp(buffer, "hello") == 0)
             {
                 uart_send_string("Hello World!\r\n");
+            }
+            else if (strcmp(buffer, "modinfo") == 0)
+            {
+                get_board_revision();
+                get_arm_memory();
             }
             else if (strcmp(buffer, "boardrev") == 0)
             {

@@ -46,11 +46,11 @@ int mailbox_call(uint32_t *mailbox)
             uart_send_string("Get Mailbox response \r\n");
             uart_send_hex(mailbox[1]);
             uart_send_string("\r\n");
-            return mailbox[1] == REQUEST_SUCCEED;
+            return 1;
         }
     }
 
-    // return 0;
+    return 0;
 }
 
 void get_board_revision()
