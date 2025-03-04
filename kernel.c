@@ -9,12 +9,21 @@ void get_board_revision();
 void get_arm_memory();
 void uart_send_hex(uint32_t value);
 
+/**
+ * @brief Prints the core ID of the current CPU core.
+ *
+ * This function retrieves the core ID from the MPIDR_EL1 register,
+ * masks the relevant bits to extract the core ID, and then sends
+ * the core ID as a hexadecimal string via UART.
+ *
+ * The core ID is extracted from bits 0:1 of the MPIDR_EL1 register.
+ *
+ */
 void print_core_id()
 {
     uint64_t core_id;
     asm volatile("mrs %0, mpidr_el1" : "=r"(core_id));
     core_id &= 0xFF; // 取出核心 ID (bits 0:1)
-
     uart_send_string("Core ID: 0x");
     uart_send_hex((uint32_t)core_id);
     uart_send_string("\r\n");
@@ -38,7 +47,7 @@ void shell()
             uart_send_string("\r\n");
 
             buffer[index] = '\0'; // Null-terminate the string
-
+            // Prevent the empty input
             if (index == 0)
             {
                 uart_send_string("> ");
@@ -86,6 +95,16 @@ void shell()
             index = 0;
             uart_send_string("> ");
         }
+        /**
+         * Handles backspace or delete character input.
+         * If the character `c` is a backspace (`\b`) or delete (ASCII 127),
+         * and there are characters to delete (index > 0), it decrements the index
+         * and sends the backspace sequence to the UART to remove the character
+         * from the display.
+         *
+         * @param c The character input to handle.
+         * @param index The current position in the input buffer.
+         */
         else if (c == '\b' || c == 127)
         {
             if (index > 0)

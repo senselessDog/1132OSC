@@ -3,6 +3,8 @@ ENTRY(_start)
 
 SECTIONS
 {
+    /*在許多 ARM 系統中，0x80000 是一個常見的啟動地址。這個地址通常是由系統的啟動代碼（bootloader）設置的。
+    當系統啟動時，bootloader 會將內核映像加載到這個地址，然後跳轉到這個地址開始執行。*/
     . = 0x80000;
 
     .text.boot : {

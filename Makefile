@@ -1,6 +1,13 @@
 # Makefile
 CC = aarch64-linux-gnu-gcc # 或者 clang
 CFLAGS = -Wall -nostdlib -nostartfiles -ffreestanding -Iinclude -mgeneral-regs-only -g
+# -Wall: Enable all the commonly used warning messages.
+# -nostdlib: Do not use the standard library when linking.
+# -nostartfiles: Do not use the standard startup files when linking.
+# -ffreestanding: Indicate that the environment is freestanding, meaning it does not have the standard library or startup files.
+# -Iinclude: Add the 'include' directory to the list of directories to be searched for header files.
+# -mgeneral-regs-only: Restrict the compiler to use only the general-purpose registers.
+# -g: Generate debug information to be used by GDB debugger.
 LD = aarch64-linux-gnu-ld # 或者 ld.lld
 OBJCOPY = aarch64-linux-gnu-objcopy # 或者 llvm-objcopy
 
