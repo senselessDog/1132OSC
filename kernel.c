@@ -8,6 +8,8 @@ void uart_send(char c);
 void get_board_revision();
 void get_arm_memory();
 void uart_send_hex(uint32_t value);
+// lab2
+void reset(int tick);
 
 /**
  * @brief Prints the core ID of the current CPU core.
@@ -63,6 +65,7 @@ void shell()
                 uart_send_string("boardrev - get board revision\r\n");
                 uart_send_string("armmem - get ARM memory information\r\n");
                 uart_send_string("coreid - print current core ID\r\n");
+                uart_send_string("reboot - reboot the system\r\n");
             }
             else if (strcmp(buffer, "hello") == 0)
             {
@@ -84,6 +87,10 @@ void shell()
             else if (strcmp(buffer, "coreid") == 0)
             {
                 print_core_id();
+            }
+            else if (strcmp(buffer, "reboot") == 0)
+            {
+                reset(10); // 10 ticks
             }
             else
             {
