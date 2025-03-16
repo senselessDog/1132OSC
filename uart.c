@@ -1,5 +1,12 @@
 #include <stdint.h>
 
+// Function prototypes
+void uart_init();
+void uart_send(char c);
+char uart_recv();
+void uart_send_string(const char *str);
+void uart_send_hex(uint32_t value);
+
 // MMIO base address for peripherals
 #define MMIO_BASE 0x3F000000
 
@@ -69,6 +76,7 @@ void uart_init()
 
     // Enable transmitter and receiver
     *AUX_MU_CNTL_REG = 3;
+    uart_send_string("UART initialized!\r\n");
 }
 
 void uart_send(char c)

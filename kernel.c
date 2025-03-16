@@ -26,9 +26,11 @@ void print_core_id()
     uint64_t core_id;
     asm volatile("mrs %0, mpidr_el1" : "=r"(core_id));
     core_id &= 0xFF; // 取出核心 ID (bits 0:1)
+    uart_send_string("Below Core list -----\r\n");
     uart_send_string("Core ID: 0x");
     uart_send_hex((uint32_t)core_id);
     uart_send_string("\r\n");
+    uart_send_string("Core list -----\r\n");
 }
 
 void shell()
@@ -129,8 +131,10 @@ void shell()
 
 void kernel_main()
 {
+    uart_send_string("[main] start kernel_main\r\n");
     uart_init();
     print_core_id(); // 在 shell 啟動前打印核心 ID
+    uart_send_string("[main] start shell\r\n");
     shell();
     while (1)
     {

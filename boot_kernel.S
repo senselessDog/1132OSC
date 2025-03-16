@@ -1,4 +1,4 @@
-/* boot.S */
+/* boot_kernel.S */
 
 .section ".text.boot"
 
@@ -37,7 +37,7 @@ stack_setup:
     /*
      * 跳到 kernel_main 函數
      */
-    bl   kernel_main           /* 呼叫 kernel_main 函數 */
+    bl   kernel_main         /* 呼叫 bootloader_main 函數 */
 
 halt:
     wfe                      /* Wait For Event, 進入低功耗模式 */

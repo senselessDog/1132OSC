@@ -1,5 +1,5 @@
 # Makefile
-CC = aarch64-linux-gnu-gcc # 或者 clang
+CC = aarch64-linux-gnu-gcc
 CFLAGS = -Wall -nostdlib -nostartfiles -ffreestanding -Iinclude -mgeneral-regs-only -g
 # -Wall: Enable all the commonly used warning messages.
 # -nostdlib: Do not use the standard library when linking.
@@ -8,45 +8,57 @@ CFLAGS = -Wall -nostdlib -nostartfiles -ffreestanding -Iinclude -mgeneral-regs-o
 # -Iinclude: Add the 'include' directory to the list of directories to be searched for header files.
 # -mgeneral-regs-only: Restrict the compiler to use only the general-purpose registers.
 # -g: Generate debug information to be used by GDB debugger.
-LD = aarch64-linux-gnu-ld # 或者 ld.lld
-OBJCOPY = aarch64-linux-gnu-objcopy # 或者 llvm-objcopy
+LD = aarch64-linux-gnu-ld
+OBJCOPY = aarch64-linux-gnu-objcopy
 
-# 定義目標檔案
-TARGET = kernel8.img
-ELF_TARGET = kernel8.elf
+# Define targets
+KERNEL_TARGET = send_kernel/kernel8.img
+KERNEL_ELF_TARGET = kernel8.elf
+BOOTLOADER_TARGET = bootloader.img
+BOOTLOADER_ELF_TARGET = bootloader.elf
 
-# 定義原始碼檔案
-SRCS = boot.S kernel.c uart.c strcmp.c mailbox.c power.c
-#  
+# Define source files
+KERNEL_SRCS = boot_kernel.S kernel.c uart.c strcmp.c mailbox.c power.c
+BOOTLOADER_SRCS = boot_bootloader.S bootloader.c uart.c strcmp.c
 
-# 定義物件檔案
-# WARN
-OBJS = $(SRCS:.S=.o)
-OBJS := $(OBJS:.c=.o)
+# Define object files
+KERNEL_OBJS = $(KERNEL_SRCS:.S=.o)
+KERNEL_OBJS := $(KERNEL_OBJS:.c=.o)
+BOOTLOADER_OBJS = $(BOOTLOADER_SRCS:.S=.o)
+BOOTLOADER_OBJS := $(BOOTLOADER_OBJS:.c=.o)
 
-# 連結腳本
-LD_SCRIPT = linker.ld
+# Linker scripts
+KERNEL_LD_SCRIPT = linker_kernel.ld
+BOOTLOADER_LD_SCRIPT = linker_bootloader.ld
 
-# 預設目標
-all: $(TARGET)
+# Default target
+all: $(KERNEL_TARGET) $(BOOTLOADER_TARGET)
 
-# 產生核心映像檔
-$(TARGET): $(ELF_TARGET)
-	$(OBJCOPY) -O binary $(ELF_TARGET) $(TARGET)
+# Generate kernel image
+$(KERNEL_TARGET): $(KERNEL_ELF_TARGET)
+	$(OBJCOPY) -O binary $(KERNEL_ELF_TARGET) $(KERNEL_TARGET)
 
-# 產生 ELF 檔
-$(ELF_TARGET): $(OBJS) $(LD_SCRIPT)
-	$(LD) -T $(LD_SCRIPT) -o $(ELF_TARGET) $(OBJS)
+# Generate kernel ELF
+$(KERNEL_ELF_TARGET): $(KERNEL_OBJS) $(KERNEL_LD_SCRIPT)
+	$(LD) -T $(KERNEL_LD_SCRIPT) -o $(KERNEL_ELF_TARGET) $(KERNEL_OBJS)
 
-# 編譯 C 程式碼
+# Generate bootloader image
+$(BOOTLOADER_TARGET): $(BOOTLOADER_ELF_TARGET)
+	$(OBJCOPY) -O binary $(BOOTLOADER_ELF_TARGET) $(BOOTLOADER_TARGET)
+
+# Generate bootloader ELF
+$(BOOTLOADER_ELF_TARGET): $(BOOTLOADER_OBJS) $(BOOTLOADER_LD_SCRIPT)
+	$(LD) -T $(BOOTLOADER_LD_SCRIPT) -o $(BOOTLOADER_ELF_TARGET) $(BOOTLOADER_OBJS)
+
+# Compile C source files
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# 編譯組合語言程式碼
+# Compile assembly source files
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# 清除編譯產生的檔案
+# Clean up generated files
 clean:
-	rm -f $(TARGET) $(ELF_TARGET) $(OBJS)
+	rm -f $(KERNEL_TARGET) $(KERNEL_ELF_TARGET) $(BOOTLOADER_TARGET) $(BOOTLOADER_ELF_TARGET) $(KERNEL_OBJS) $(BOOTLOADER_OBJS)
 

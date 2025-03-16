@@ -62,16 +62,20 @@ void load_kernel()
     uart_send_string("Kernel loaded successfully!\r\n");
 
     // Jump to kernel
-    void (*kernel_entry)() = (void (*)())KERNEL_LOAD_ADDRESS;
+    void (*kernel_entry)(void) = (void (*)(void))KERNEL_LOAD_ADDRESS;
     kernel_entry();
+
+    return;
 }
 
 void bootloader_main()
 {
     uart_init();
-    load_kernel();
+    uart_send_string("[bootloader_main] start bootloader!\r\n");
     while (1)
     {
+        load_kernel();
+        uart_send_string("[bootloader_main] can't load kernel error!\r\n");
         // Loop indefinitely
     }
 }
