@@ -115,3 +115,29 @@ void uart_send_hex(uint32_t value)
         uart_send(hex_chars[(value >> i) & 0xF]);
     }
 }
+
+void uart_send_int(int value)
+{
+    char buffer[12]; // Buffer to hold the string representation of the integer
+    int index = 0;
+
+    // Handle negative numbers
+    if (value < 0)
+    {
+        uart_send('-');
+        value = -value;
+    }
+
+    // Convert integer to string
+    do
+    {
+        buffer[index++] = (value % 10) + '0';
+        value /= 10;
+    } while (value > 0);
+
+    // Send the string in reverse order
+    while (index > 0)
+    {
+        uart_send(buffer[--index]);
+    }
+}

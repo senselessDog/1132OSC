@@ -13,7 +13,7 @@ def send_kernel(kernel_path, serial_port):
     print("start send the header")
     ser.write(header)
     print("finish send the header")
-    time.sleep(5)
+    time.sleep(3)
     print("start send the kernel")
     ser.write(kernel_data)
     print("finish send the kernel")

@@ -10,6 +10,8 @@ void get_arm_memory();
 void uart_send_hex(uint32_t value);
 // lab2
 void reset(int tick);
+void parse_cpio_archive(char *archive);
+void list_cpio_files(const char *archive);
 
 /**
  * @brief Prints the core ID of the current CPU core.
@@ -67,7 +69,10 @@ void shell()
                 uart_send_string("boardrev - get board revision\r\n");
                 uart_send_string("armmem - get ARM memory information\r\n");
                 uart_send_string("coreid - print current core ID\r\n");
+                // lab2
                 uart_send_string("reboot - reboot the system\r\n");
+                uart_send_string("ls - list the filename\r\n");
+                uart_send_string("cat -show the file context\r\n");
             }
             else if (strcmp(buffer, "hello") == 0)
             {
@@ -93,6 +98,20 @@ void shell()
             else if (strcmp(buffer, "reboot") == 0)
             {
                 reset(10); // 10 ticks
+            }
+            else if (strcmp(buffer, "ls") == 0)
+            {
+                // char file_buffer[1024];
+                list_cpio_files((char *)0x20000000);
+                // uart_send_string(file_buffer);
+                uart_send_string("\r\n");
+            }
+            else if (strcmp(buffer, "cat") == 0)
+            {
+                // char file_buffer[1024];
+                parse_cpio_archive((char *)0x20000000);
+                // uart_send_string(file_buffer);
+                uart_send_string("\r\n");
             }
             else
             {
@@ -136,6 +155,7 @@ void kernel_main()
     print_core_id(); // 在 shell 啟動前打印核心 ID
     uart_send_string("[main] start shell\r\n");
     shell();
+    uart_send_string("[main] shell error\r\n");
     while (1)
     {
         // Loop indefinitely
