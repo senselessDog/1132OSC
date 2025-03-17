@@ -42,20 +42,22 @@ static int hex_to_int(char *p, int len)
 }
 void parse_cpio_archive(char *archive)
 {
+
+    char filename[1024];
+    int index = 0;
+    // Receive the filename from the user
     uart_send_string("\r\n");
     uart_send_string("Filename: ");
-    // Receive the filename from the user
-    char filename[1024];
     while (1)
     {
 
-        int index = 0;
         char c = uart_recv();
         uart_send(c); // Echo the received character
         if (c == '\r' || c == '\n')
         {
             filename[index] = '\0'; // Null-terminate the string
             index = 0;
+            uart_send_string("\r\n");
             break;
         }
         else
@@ -79,19 +81,12 @@ void parse_cpio_archive(char *archive)
             return;
         }
 
-        // Check the magic number
-        // if (strcmp(header->c_magic, "070701") != 0)
-        // {
-        //     uart_send_string(ptr);
-        //     uart_send_string("\r\n");
-        //     uart_send_string("Invalid CPIO magic number\r\n");
-        //     return;
-        // }
-
         // Get the namesize and filesize
         int namesize = hex_to_int(header->c_namesize, 8);
         int filesize = hex_to_int(header->c_filesize, 8);
-
+        uart_send_string("[cat] NameMatch\r\n");
+        uart_send_int(strcmp(ptr, "file1.txt"));
+        uart_send_string("\r\n");
         if (strcmp(ptr, filename) == 0)
         {
             ptr += namesize;
@@ -104,9 +99,9 @@ void parse_cpio_archive(char *archive)
             for (int i = 0; i < filesize; i++)
             {
                 uart_send(ptr[i]);
-                uart_send_string("\r\n");
             }
-            uart_send_string("\r\nEnd\r\n");
+            uart_send_string("\r\n");
+            uart_send_string("End\r\n");
             uart_send_string("File found and read successfully\r\n");
             return;
         }
