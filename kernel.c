@@ -14,6 +14,7 @@ void parse_cpio_archive(char *archive);
 void list_cpio_files(const char *archive);
 void uart_send_int(int value);
 void *simple_alloc(size_t size);
+int fdt_init(void *fdt_addr);
 /**
  * @brief Prints the core ID of the current CPU core.
  *
@@ -163,11 +164,23 @@ void shell()
     }
 }
 
-void kernel_main()
+void kernel_main(void *dtb_addr)
 {
     uart_send_string("[main] start kernel_main\r\n");
     uart_init();
     print_core_id(); // 在 shell 啟動前打印核心 ID
+
+    uart_send_string("[main] start DTB\r\n");
+    // Get the DTB address from x0 register
+    // 初始化 DTB 解析器
+    uart_send_string(dtb_addr);
+    if (fdt_init(dtb_addr) != 0)
+    {
+        uart_send_string("Failed to initialize DTB parser\r\n");
+        return;
+    }
+    uart_send_string("[main] Finish DTB\r\n");
+
     uart_send_string("[main] start shell\r\n");
     shell();
     uart_send_string("[main] shell error\r\n");

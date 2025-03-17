@@ -18,7 +18,7 @@ BOOTLOADER_TARGET = bootloader.img
 BOOTLOADER_ELF_TARGET = bootloader.elf
 
 # Define source files
-KERNEL_SRCS = boot_kernel.S kernel.c uart.c strcmp.c mailbox.c power.c cpio.c alloc.c
+KERNEL_SRCS = boot_kernel.S kernel.c uart.c strcmp.c mailbox.c power.c cpio.c alloc.c devicetree.c
 BOOTLOADER_SRCS = boot_bootloader.S bootloader.c uart.c strcmp.c
 
 # Define object files

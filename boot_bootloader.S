@@ -50,6 +50,7 @@ stack_setup:
     /*
      * 跳到 kernel_main 函數
      */
+    mov  x0, x28        /* 跳轉到主函數，傳遞 DTB 地址 */
     bl   bootloader_main-0x20000          /* 呼叫 bootloader_main 函數 */
 
 halt:

@@ -12,7 +12,8 @@ _start:
     and  x0, x0, #0xFF         /* 取出核心 ID (bits 0:1) */
     cmp  x0, #0               /* 比較核心 ID 是否為 0 */
     b.ne halt                 /* 如果核心 ID 不是 0，則跳到 halt 標籤 */
-
+    /* 保存 dtb 地址 */
+    mov  x28, x0              /* 將 x0 (dtb 地址) 保存在 x28 中 */
     /*
      * 初始化 BSS 區段
      */
@@ -37,6 +38,7 @@ stack_setup:
     /*
      * 跳到 kernel_main 函數
      */
+    mov  x0, x28        /* 跳轉到主函數，傳遞 DTB 地址 */
     bl   kernel_main         /* 呼叫 bootloader_main 函數 */
 
 halt:
