@@ -24,10 +24,10 @@ SECTIONS
         *(.bss)
         __bss_end = .;
     }
-
+     _end = .;
     . = ALIGN(8);
     _stack_top = . + 0x10000;
-    _end = .;
+    
 }
 
 __bootloader_size = (_end - 0x60000)>>3;

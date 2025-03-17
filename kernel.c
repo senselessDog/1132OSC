@@ -15,6 +15,11 @@ void list_cpio_files(const char *archive);
 void uart_send_int(int value);
 void *simple_alloc(size_t size);
 int fdt_init(void *fdt_addr);
+
+extern uint64_t g_initramfs_addr;
+extern uint64_t g_initramfs_size;
+// 從 DTB 中獲取 initramfs 信息的函數
+int get_initramfs_info(void *dtb_addr);
 /**
  * @brief Prints the core ID of the current CPU core.
  *
@@ -105,14 +110,17 @@ void shell()
             else if (strcmp(buffer, "ls") == 0)
             {
                 // char file_buffer[1024];
-                list_cpio_files((char *)0x20000000);
+                uart_send_string("Start list\r\n");
+                uart_send_string((char *)g_initramfs_addr);
+                uart_send_string("\r\n");
+                list_cpio_files((char *)g_initramfs_addr);
                 // uart_send_string(file_buffer);
                 uart_send_string("\r\n");
             }
             else if (strcmp(buffer, "cat") == 0)
             {
                 // char file_buffer[1024];
-                parse_cpio_archive((char *)0x20000000);
+                parse_cpio_archive((char *)g_initramfs_addr);
                 // uart_send_string(file_buffer);
                 uart_send_string("\r\n");
             }
@@ -166,19 +174,20 @@ void shell()
 
 void kernel_main(void *dtb_addr)
 {
-    uart_send_string("[main] start kernel_main\r\n");
-    uart_init();
+    // uart_init();
     print_core_id(); // 在 shell 啟動前打印核心 ID
-
+    uart_send_hex((uint32_t)dtb_addr);
+    uart_send_string("\r\n");
     uart_send_string("[main] start DTB\r\n");
     // Get the DTB address from x0 register
     // 初始化 DTB 解析器
-    uart_send_string(dtb_addr);
     if (fdt_init(dtb_addr) != 0)
     {
         uart_send_string("Failed to initialize DTB parser\r\n");
-        return;
     }
+    uart_send_string("[main] get_initramfs \r\n");
+    // 獲取 initramfs 地址和大小
+    get_initramfs_info(dtb_addr);
     uart_send_string("[main] Finish DTB\r\n");
 
     uart_send_string("[main] start shell\r\n");

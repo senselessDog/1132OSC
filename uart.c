@@ -76,7 +76,6 @@ void uart_init()
 
     // Enable transmitter and receiver
     *AUX_MU_CNTL_REG = 3;
-    uart_send_string("UART initialized!\r\n");
 }
 
 void uart_send(char c)

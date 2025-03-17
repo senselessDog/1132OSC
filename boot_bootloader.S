@@ -5,15 +5,17 @@
 .global _start
 _start:
 
+
     /*
      * 暫停非主要核心
      * 只允許 CPU core 0 執行
      */
-    mrs  x0, mpidr_el1       /* 讀取多核心處理器 ID 暫存器 */
-    and  x0, x0, #0xFF         /* 取出核心 ID (bits 0:1) */
-    cmp  x0, #0               /* 比較核心 ID 是否為 0 */
+    mrs  x1, mpidr_el1       /* 讀取多核心處理器 ID 暫存器 */
+    and  x1, x1, #0xFF         /* 取出核心 ID (bits 0:1) */
+    cmp  x1, #0               /* 比較核心 ID 是否為 0 */
     b.ne halt                 /* 如果核心 ID 不是 0，則跳到 halt 標籤 */
-
+    /* 保存 dtb 地址 */
+    mov  x28, x0             /* 將 x0 (dtb 地址) 保存在 x28 中 */
     
     /* 重定位 bootloader */
     ldr  x1, =0x80000         /* 當前加載地址 */
@@ -50,7 +52,7 @@ stack_setup:
     /*
      * 跳到 kernel_main 函數
      */
-    mov  x0, x28        /* 跳轉到主函數，傳遞 DTB 地址 */
+    mov  x0, x28             /* 將 x28 (dtb 地址) 保存在 x0 中 */
     bl   bootloader_main-0x20000          /* 呼叫 bootloader_main 函數 */
 
 halt:
