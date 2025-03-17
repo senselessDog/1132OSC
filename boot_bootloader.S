@@ -4,6 +4,7 @@
 
 .global _start
 _start:
+
     /*
      * 暫停非主要核心
      * 只允許 CPU core 0 執行
@@ -13,8 +14,6 @@ _start:
     cmp  x0, #0               /* 比較核心 ID 是否為 0 */
     b.ne halt                 /* 如果核心 ID 不是 0，則跳到 halt 標籤 */
 
-    /* 保存 dtb 地址 */
-    mov  x28, x0              /* 將 x0 (dtb 地址) 保存在 x28 中 */
     
     /* 重定位 bootloader */
     ldr  x1, =0x80000         /* 當前加載地址 */
