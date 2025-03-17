@@ -26,5 +26,12 @@ SECTIONS
     }
 
     . = ALIGN(8);
+    .heap (NOLOAD) : {
+        __heap_start = .;
+        . += 0x10000; /* 1 MB heap size */
+        __heap_end = .;
+    }
+
+    . = ALIGN(8);
     _stack_top = . + 0x10000;
 }

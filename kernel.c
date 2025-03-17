@@ -12,7 +12,8 @@ void uart_send_hex(uint32_t value);
 void reset(int tick);
 void parse_cpio_archive(char *archive);
 void list_cpio_files(const char *archive);
-
+void uart_send_int(int value);
+void *simple_alloc(size_t size);
 /**
  * @brief Prints the core ID of the current CPU core.
  *
@@ -73,6 +74,7 @@ void shell()
                 uart_send_string("reboot - reboot the system\r\n");
                 uart_send_string("ls - list the filename\r\n");
                 uart_send_string("cat -show the file context\r\n");
+                uart_send_string("memAlloc <size> - allocate memory of given size\r\n");
             }
             else if (strcmp(buffer, "hello") == 0)
             {
@@ -112,6 +114,19 @@ void shell()
                 parse_cpio_archive((char *)0x20000000);
                 // uart_send_string(file_buffer);
                 uart_send_string("\r\n");
+            }
+            else if (strncmp(buffer, "memAlloc ", 9) == 0)
+            {
+                size_t size = strtol(buffer + 9, NULL, 10);
+                uart_send_int((int)size);
+                uart_send_string("\r\n");
+                void *ptr = simple_alloc(size);
+                if (ptr != NULL)
+                {
+                    uart_send_string("Memory allocated at address: ");
+                    uart_send_hex((uint32_t)ptr);
+                    uart_send_string("\r\n");
+                }
             }
             else
             {
