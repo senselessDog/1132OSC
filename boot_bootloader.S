@@ -13,6 +13,20 @@ _start:
     cmp  x0, #0               /* 比較核心 ID 是否為 0 */
     b.ne halt                 /* 如果核心 ID 不是 0，則跳到 halt 標籤 */
 
+    /* 保存 dtb 地址 */
+    mov  x28, x0              /* 將 x0 (dtb 地址) 保存在 x28 中 */
+    
+    /* 重定位 bootloader */
+    ldr  x1, =0x80000         /* 當前加載地址 */
+    ldr  x2, =0x60000         /* 目標地址 */
+    ldr  w3, =__bootloader_size /* 加載 bootloader 大小 (以 8 字節為單位) */
+
+relocate:
+    /* 執行重定位過程 */
+    ldr  x4, [x1], #8         /* 從源地址加載 8 字節，然後增加源地址 */
+    str  x4, [x2], #8         /* 存儲 8 字節到目標地址，然後增加目標地址 */
+    sub  w3, w3, #1           /* 減少計數 */
+    cbnz w3, relocate         /* 如果計數不為零，繼續重定位 */
     /*
      * 初始化 BSS 區段
      */
@@ -37,7 +51,7 @@ stack_setup:
     /*
      * 跳到 kernel_main 函數
      */
-    bl   bootloader_main          /* 呼叫 bootloader_main 函數 */
+    bl   bootloader_main-0x20000          /* 呼叫 bootloader_main 函數 */
 
 halt:
     wfe                      /* Wait For Event, 進入低功耗模式 */
