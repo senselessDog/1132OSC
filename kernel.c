@@ -110,11 +110,11 @@ void shell()
             else if (strcmp(buffer, "ls") == 0)
             {
                 // char file_buffer[1024];
-                uart_send_string("Start list\r\n");
-                uart_send_hex((uint32_t)g_initramfs_addr);
-                uart_send_string("\r\n");
-                uart_send_string((char *)g_initramfs_addr);
-                uart_send_string("\r\n");
+                // uart_send_string("Start list\r\n");
+                // uart_send_hex((uint32_t)g_initramfs_addr);
+                // uart_send_string("\r\n");
+                // uart_send_string((char *)g_initramfs_addr);
+                // uart_send_string("\r\n");
                 list_cpio_files((char *)g_initramfs_addr);
                 //  uart_send_string(file_buffer);
                 uart_send_string("\r\n");

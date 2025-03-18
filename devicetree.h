@@ -43,9 +43,6 @@ int fdt_init(void *fdt_addr);
 // 遍歷 DTB 並對每個節點調用回調函數
 int fdt_traverse(fdt_callback_t callback, void *arg);
 
-// 查找特定路徑的節點
-int fdt_get_node(const char *path, fdt_callback_t callback, void *arg);
-
 // 大端序轉換函數 (DTB 使用大端序)
 uint32_t fdt32_to_cpu(uint32_t val);
 

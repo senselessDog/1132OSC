@@ -84,9 +84,9 @@ void parse_cpio_archive(char *archive)
         // Get the namesize and filesize
         int namesize = hex_to_int(header->c_namesize, 8);
         int filesize = hex_to_int(header->c_filesize, 8);
-        uart_send_string("[cat] NameMatch\r\n");
-        uart_send_int(strcmp(ptr, "file1.txt"));
-        uart_send_string("\r\n");
+        // uart_send_string("[cat] NameMatch\r\n");
+        // uart_send_int(strcmp(ptr, "file1.txt"));
+        // uart_send_string("\r\n");
         if (strcmp(ptr, filename) == 0)
         {
             ptr += namesize;
@@ -94,14 +94,11 @@ void parse_cpio_archive(char *archive)
             {
                 ptr += 4 - ((ptr - (char *)header) % 4);
             }
-            // buffer[filesize] = '\0';
-            uart_send_string("Start\r\n");
             for (int i = 0; i < filesize; i++)
             {
                 uart_send(ptr[i]);
             }
             uart_send_string("\r\n");
-            uart_send_string("End\r\n");
             uart_send_string("File found and read successfully\r\n");
             return;
         }
@@ -126,51 +123,24 @@ void list_cpio_files(char *archive)
     while (1)
     {
         struct cpio_newc_header *header;
-        uart_send_string("[list_cpio_files] start\r\n");
-        uart_send_string(ptr);
-        uart_send_string("\r\n");
         header = (struct cpio_newc_header *)ptr;
-        uart_send_string(header->c_magic);
-        uart_send_string("\r\n");
         ptr += sizeof(*header);
         if (strcmp(ptr, "TRAILER!!!") == 0)
         {
             uart_send_string("End of CPIO archive\r\n");
             return;
         }
-
-        // if (strncmp(header.c_magic, "070701", 6) != 0)
-        // {
-        //     uart_send_string("[list_cpio_files] debug\r\n");
-        //     uart_send_hex(ptr);
-        //     uart_send_string("\r\n");
-        //     uart_send_string(header.c_magic);
-        //     uart_send_string("\r\n");
-        //     uart_send_string("Invalid CPIO magic number\r\n");
-        //     return;
-        // }
         uart_send_string("[list_cpio_files] parse\r\n");
         int namesize = hex_to_int(header->c_namesize, 8);
         int filesize = hex_to_int(header->c_filesize, 8);
-        uart_send_int(namesize);
-        uart_send_string("\r\n");
-        uart_send_int(filesize);
-        uart_send_string("\r\n");
 
-        uart_send_string("[list_cpio_files] name\r\n");
         uart_send_string(ptr);
         uart_send_string("\r\n");
-
-        // char name[namesize];
-        uart_send_string("[list_cpio_files] namesize & filesize\r\n");
         ptr += namesize;
         if ((ptr - (char *)header) % 4 != 0)
         {
             ptr += 4 - ((ptr - (char *)header) % 4);
         }
-        uart_send_string("[list_cpio_files] file context\r\n");
-        uart_send_string(ptr);
-        uart_send_string("\r\n");
         ptr += filesize;
 
         if ((ptr - (char *)header) % 4 != 0)

@@ -7,7 +7,7 @@ void uart_send_hex(uint32_t value);
 static void *g_fdt_addr = NULL;
 
 uint64_t g_initramfs_addr;
-uint64_t g_initramfs_size = 0;
+uint64_t g_initramfs_size;
 
 // 初始化 FDT 解析器
 int fdt_init(void *fdt_addr)
@@ -197,26 +197,5 @@ int get_initramfs_info(void *dtb_addr)
         // 如果無法從 DTB 中獲取，使用默認地址作為備選
         g_initramfs_addr = 0x20000000;
         return -1;
-    }
-}
-
-void dtb_search()
-{
-    // 獲取 initramfs 地址
-    struct initramfs_info info = {0};
-    fdt_traverse(initramfs_callback, &info);
-    if (info.found)
-    {
-        uart_send_string("Found initramfs at address: ");
-        // 打印地址（需要實現整數到字符串的轉換函數）
-        // ...
-        uart_send_string("\r\n");
-
-        // 使用找到的 initramfs 地址和大小
-        // ...
-    }
-    else
-    {
-        uart_send_string("Initramfs not found in DTB\r\n");
     }
 }
