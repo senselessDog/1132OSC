@@ -44,12 +44,15 @@ uint32_t fdt32_to_cpu(uint32_t val)
 // 遍歷 DTB 並對每個節點調用回調函數
 int fdt_traverse(fdt_callback_t callback, void *arg)
 {
+    uart_send_string("start traverse \r\n");
     if (!g_fdt_addr || !callback)
     {
         return -1;
     }
-
     struct fdt_header *header = (struct fdt_header *)g_fdt_addr;
+    uart_send_string("Found header: \r\n");
+    uart_send_hex(header->magic);
+    uart_send_string("\r\n");
     uint32_t struct_offset = fdt32_to_cpu(header->off_dt_struct);
     uint32_t strings_offset = fdt32_to_cpu(header->off_dt_strings);
 
@@ -102,7 +105,13 @@ int fdt_traverse(fdt_callback_t callback, void *arg)
 
             // 獲取屬性值
             void *data = (void *)(prop + 1);
-
+            uart_send_string("Found property: \r\n");
+            uart_send_string(path);
+            uart_send_string("\r\n");
+            uart_send_string(name);
+            uart_send_string("\r\n");
+            uart_send_string(data);
+            uart_send_string("\r\n");
             // 調用回調函數
             if (callback(path, name, data, len, arg) != 0)
             {
@@ -129,14 +138,6 @@ int fdt_traverse(fdt_callback_t callback, void *arg)
     return 0;
 }
 
-// 查找特定路徑的節點
-int fdt_get_node(const char *path, fdt_callback_t callback, void *arg)
-{
-    // 實現省略，類似 fdt_traverse 但只查找特定路徑的節點
-    // ...
-    return 0;
-}
-
 // 用於保存 initramfs 信息的結構
 struct initramfs_info
 {
@@ -149,45 +150,16 @@ struct initramfs_info
 int initramfs_callback(const char *path, const char *name, const void *data, uint32_t size, void *arg)
 {
     struct initramfs_info *info = (struct initramfs_info *)arg;
-
+    // uart_send_string("Found /chosen: \r\n");
     // 檢查路徑和屬性名稱
-    if (strcmp(path, "/chosen") == 0)
+    if (strcmp(name, "linux,initrd-start") == 0)
     {
-        if (strcmp(name, "linux,initrd-start") == 0 && size >= 4)
-        {
-            // 讀取 initramfs 起始地址（可能是 32 位或 64 位的大端序值）
-            if (size == 4)
-            {
-                info->start_addr = fdt32_to_cpu(*(uint32_t *)data);
-            }
-            else if (size == 8)
-            {
-                uint32_t high = fdt32_to_cpu(*(uint32_t *)data);
-                uint32_t low = fdt32_to_cpu(*((uint32_t *)data + 1));
-                info->start_addr = ((uint64_t)high << 32) | low;
-            }
-            info->found = 1;
-        }
-        else if (strcmp(name, "linux,initrd-end") == 0 && size >= 4)
-        {
-            // 讀取 initramfs 結束地址
-            uint64_t end_addr;
-            if (size == 4)
-            {
-                end_addr = fdt32_to_cpu(*(uint32_t *)data);
-            }
-            else if (size == 8)
-            {
-                uint32_t high = fdt32_to_cpu(*(uint32_t *)data);
-                uint32_t low = fdt32_to_cpu(*((uint32_t *)data + 1));
-                end_addr = ((uint64_t)high << 32) | low;
-            }
-
-            if (info->found)
-            {
-                info->size = end_addr - info->start_addr;
-            }
-        }
+        g_initramfs_addr = (uint64_t)fdt32_to_cpu((uint32_t)data);
+    }
+    else if (strcmp(name, "linux,initrd-end") == 0)
+    {
+        uint32_t end_addr = fdt32_to_cpu((uint32_t)data);
+        g_initramfs_size = (uint64_t)(end_addr - g_initramfs_addr);
     }
 
     return 0; // 繼續遍歷
