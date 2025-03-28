@@ -10,13 +10,16 @@ static size_t heap_index = 0;
 
 void *simple_alloc(size_t size)
 {
+    if (size%8!=0){
+        size += 8 - (size % 8);
+    }
     heap_size = &__heap_end - &__heap_start;
     if (heap_index + size > heap_size)
     {
         uart_send_string("Heap overflow\r\n");
         return NULL;
     }
-    void *ptr = heap + heap_index;
     heap_index += size;
+    void *ptr = heap + heap_index;
     return ptr;
 }
