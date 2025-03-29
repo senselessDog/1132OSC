@@ -15,7 +15,9 @@ void list_cpio_files(const char *archive);
 void uart_send_int(int value);
 void *simple_alloc(size_t size);
 int fdt_init(void *fdt_addr);
-
+//lab3
+void run_user(char *archive);
+// 從 DTB 中獲取 initramfs 信息的全局變量
 extern uint64_t g_initramfs_addr;
 extern uint64_t g_initramfs_size;
 // 從 DTB 中獲取 initramfs 信息的函數
@@ -81,6 +83,7 @@ void shell()
                 uart_send_string("ls - list the filename\r\n");
                 uart_send_string("cat -show the file context\r\n");
                 uart_send_string("memAlloc <size> - allocate memory of given size\r\n");
+                uart_send_string("run <user program> - run user program on EL0\r\n");
             }
             else if (strcmp(buffer, "hello") == 0)
             {
@@ -138,6 +141,11 @@ void shell()
                     uart_send_hex((uint32_t)ptr);
                     uart_send_string("\r\n");
                 }
+            }
+            else if (strcmp(buffer, "run") == 0)
+            {
+                uart_send_string("run user program on EL0\r\n");
+                run_user((char *)g_initramfs_addr);
             }
             else
             {

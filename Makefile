@@ -12,27 +12,30 @@ LD = aarch64-linux-gnu-ld
 OBJCOPY = aarch64-linux-gnu-objcopy
 
 # Define targets
-KERNEL_TARGET = send_kernel/kernel8.img
+KERNEL_TARGET = script/kernel8.img
 KERNEL_ELF_TARGET = kernel8.elf
 BOOTLOADER_TARGET = bootloader.img
 BOOTLOADER_ELF_TARGET = bootloader.elf
 
 # Define source files
-KERNEL_SRCS = boot_kernel.S kernel.c uart.c strcmp.c mailbox.c power.c cpio.c alloc.c devicetree.c
+KERNEL_SRCS = boot_kernel.S kernel.c uart.c strcmp.c mailbox.c \
+		power.c cpio.c alloc.c devicetree.c \
+		run_userprogram.c exception_entry.c exception.S
 BOOTLOADER_SRCS = boot_bootloader.S bootloader.c uart.c strcmp.c
-
+USER_SRCS = user/userProcessStatus.S
 # Define object files
 KERNEL_OBJS = $(KERNEL_SRCS:.S=.o)
 KERNEL_OBJS := $(KERNEL_OBJS:.c=.o)
 BOOTLOADER_OBJS = $(BOOTLOADER_SRCS:.S=.o)
 BOOTLOADER_OBJS := $(BOOTLOADER_OBJS:.c=.o)
-
+#user program object files
+USER_OBJS = $(USER_SRCS:.S=.o)
 # Linker scripts
 KERNEL_LD_SCRIPT = linker_kernel.ld
 BOOTLOADER_LD_SCRIPT = linker_bootloader.ld
 
 # Default target
-all: $(KERNEL_TARGET) $(BOOTLOADER_TARGET)
+all: $(KERNEL_TARGET) $(BOOTLOADER_TARGET) #$(USER_OBJS)
 
 # Generate kernel image
 $(KERNEL_TARGET): $(KERNEL_ELF_TARGET)
@@ -61,4 +64,5 @@ $(BOOTLOADER_ELF_TARGET): $(BOOTLOADER_OBJS) $(BOOTLOADER_LD_SCRIPT)
 # Clean up generated files
 clean:
 	rm -f $(KERNEL_TARGET) $(KERNEL_ELF_TARGET) $(BOOTLOADER_TARGET) $(BOOTLOADER_ELF_TARGET) $(KERNEL_OBJS) $(BOOTLOADER_OBJS)
+# rm -f $(USER_OBJS)
 

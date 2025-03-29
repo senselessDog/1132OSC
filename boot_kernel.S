@@ -14,6 +14,11 @@ _start:
     b.ne halt                 /* 如果核心 ID 不是 0，則跳到 halt 標籤 */
     /* 保存 dtb 地址 */
     mov  x28, x0              /* 將 x0 (dtb 地址) 保存在 x28 中 */
+    
+    /* switch kernel from EL2 to EL1
+    bl from_el2_to_el1
+    /* set vector table*/
+    bl set_exception_vector_table
     /*
      * 初始化 BSS 區段
      */
@@ -44,6 +49,14 @@ stack_setup:
 halt:
     wfe                      /* Wait For Event, 進入低功耗模式 */
     b halt                   /* 無限迴圈 */
+
+from_el2_to_el1:
+    mov x0, (1 << 31) // EL1 uses aarch64
+    msr hcr_el2, x0
+    mov x0, 0x3c5 // EL1h (SPSel = 1) with interrupt disabled
+    msr spsr_el2, x0
+    msr elr_el2, lr
+    eret // return to EL1
 
 .section ".data"
 .global __bss_start
