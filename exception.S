@@ -2,9 +2,9 @@
 .global set_exception_vector_table
 // save general registers to stack
 .macro save_all
-    sub sp, sp, 32 * 8
-    stp x0, x1, [sp, 16 * 0]
-    stp x2, x3, [sp, 16 * 1]
+    sub sp, sp, 32 * 9
+    stp x0, x1, [sp, 16 * 0] // storing the contents of x0 and x1 to the address pointed by the stack pointer sp with an offset of 16 bytes
+    stp x2, x3, [sp, 16 * 1] // stp: Store Pair and it's used to store a pair of 64-bit (8-byte) registers to memory
     stp x4, x5, [sp, 16 * 2]
     stp x6, x7, [sp, 16 * 3]
     stp x8, x9, [sp, 16 * 4]
@@ -19,10 +19,17 @@
     stp x26, x27, [sp, 16 * 13]
     stp x28, x29, [sp, 16 * 14]
     str x30, [sp, 16 * 15]
+    // 保存異常相關寄存器
+    mrs x28, spsr_el1
+    mrs x29, elr_el1
+    stp x28, x29, [sp, 16 * 16]
 .endm
 
 // load general registers from stack
 .macro load_all
+    ldp x28, x29, [sp, 16 * 16]
+    msr spsr_el1, x28
+    msr elr_el1, x29
     ldp x0, x1, [sp, 16 * 0]
     ldp x2, x3, [sp, 16 * 1]
     ldp x4, x5, [sp, 16 * 2]
@@ -39,13 +46,15 @@
     ldp x26, x27, [sp, 16 * 13]
     ldp x28, x29, [sp, 16 * 14]
     ldr x30, [sp, 16 * 15]
-    add sp, sp, 32 * 8
+    add sp, sp, 32 * 9
 .endm
 
 default_exception_handler:
     eret
 
 sync_lower_el_64_handler:
+    // 先確保使用 SP_EL1
+    msr SPSel, #1
     save_all
     bl sync_lower_el_64_entry
     load_all

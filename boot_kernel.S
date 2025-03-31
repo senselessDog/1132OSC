@@ -15,7 +15,7 @@ _start:
     /* 保存 dtb 地址 */
     mov  x28, x0              /* 將 x0 (dtb 地址) 保存在 x28 中 */
     
-    /* switch kernel from EL2 to EL1
+    /* switch kernel from EL2 to EL1*/
     bl from_el2_to_el1
     /* set vector table*/
     bl set_exception_vector_table

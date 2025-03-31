@@ -146,10 +146,14 @@ void list_cpio_files(char *archive)
         }
     }
 }
-
-void* find_program_in_initramfs(char *archive, const char *filename)
+struct file_information
 {
-    
+    void *filecontext;
+    int filesize;
+};
+struct file_information find_program_in_initramfs(char *archive, const char *filename)
+{
+
     // 開始解析檔案
     struct cpio_newc_header *header;
     char *ptr = archive;
@@ -162,7 +166,7 @@ void* find_program_in_initramfs(char *archive, const char *filename)
         if (strcmp(ptr, "TRAILER!!!") == 0)
         {
             uart_send_string("Program not found in initramfs\r\n");
-            return NULL;
+            return;
         }
 
         // 取得檔案名稱長度與檔案大小
@@ -179,32 +183,34 @@ void* find_program_in_initramfs(char *archive, const char *filename)
             uart_send_string("Program found: ");
             uart_send_string(filename);
             uart_send_string("\r\n");
-            
+
             // 計算檔案內容的位置
             char *file_content = ptr + namesize;
-            
+
             // 對齊到4位元組邊界
             if ((file_content - (char *)header) % 4 != 0)
             {
                 file_content += 4 - ((file_content - (char *)header) % 4);
             }
-            
+            struct file_information file_info;
+            file_info.filecontext = (void *)file_content;
+            file_info.filesize = filesize;
             // 返回檔案內容的指針
-            return (void*)file_content;
+            return file_info;
         }
-        
+
         // 移動到下一個檔案
         ptr += namesize;
-        
+
         // 對齊到4位元組邊界
         if ((ptr - (char *)header) % 4 != 0)
         {
             ptr += 4 - ((ptr - (char *)header) % 4);
         }
-        
+
         // 跳過檔案內容
         ptr += filesize;
-        
+
         // 對齊到4位元組邊界
         if (filesize % 4 != 0)
         {
