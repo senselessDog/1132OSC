@@ -52,6 +52,12 @@
 default_exception_handler:
     eret
 
+el0_irq_exception_handler:
+    save_all                    // 保存上下文，使用之前定義的save_all宏
+    bl el0_irq_entry                // 調用C函數處理IRQ
+    load_all                    // 恢復上下文
+    eret                        // 返回中斷點
+
 sync_lower_el_64_handler:
     // 先確保使用 SP_EL1
     msr SPSel, #1
@@ -81,7 +87,7 @@ exception_vector_table:
     .align 7
     b sync_lower_el_64_handler         // Lower EL using AArch64 - Synchronous (need to do)
     .align 7
-    b default_exception_handler        // Lower EL using AArch64 - IRQ
+    b el0_irq_exception_handler        // Lower EL using AArch64 - IRQ
     .align 7
     b default_exception_handler        // Lower EL using AArch64 - FIQ
     .align 7

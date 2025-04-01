@@ -19,6 +19,8 @@ _start:
     bl from_el2_to_el1
     /* set vector table*/
     bl set_exception_vector_table
+    /* IRQ enable*/
+    bl core_timer_enable
     /*
      * 初始化 BSS 區段
      */
@@ -58,6 +60,16 @@ from_el2_to_el1:
     msr elr_el2, lr
     eret // return to EL1
 
+#define CORE0_TIMER_IRQ_CTRL 0x40000040
+core_timer_enable:
+    mov x0, 1
+    msr cntp_ctl_el0, x0 // enable
+    mrs x0, cntfrq_el0
+    msr cntp_tval_el0, x0 // set expired time
+    mov x0, 2
+    ldr x1, =CORE0_TIMER_IRQ_CTRL
+    str w0, [x1] // unmask timer interrupt
+    ret
 .section ".data"
 .global __bss_start
 __bss_start:

@@ -22,7 +22,7 @@ void switch_to_el0(void *start_addr, void *stack_ptr)
         "msr spsr_el1, %0\n"
         "msr elr_el1, %1\n"
         "msr sp_el0, %2\n"
-        "eret\n" ::"r"(0x3c0),
+        "eret\n" ::"r"(0x0),
         "r"(start_addr), "r"(stack_ptr));
 }
 
