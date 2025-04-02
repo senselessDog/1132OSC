@@ -5,14 +5,14 @@
 void uart_enable_interrupt()
 {
     // 啟用 AUX 中斷 (位元 29)
-    uart_send_string("Enable AUX IRQ\r\n");
+    // uart_send_string("Enable AUX IRQ\r\n");
     *ENABLE_IRQS1 = (1 << 29);
-    uart_send_hex((uint32_t)*AUX_MU_LCR_REG);
-    uart_send_string("\r\n");
-    uart_send_hex((uint32_t)*AUX_MU_IER_REG);
-    uart_send_string("\r\n");
-    uart_send_hex((uint32_t)*ENABLE_IRQS1);
-    uart_send_string("\r\n");
+    // uart_send_hex((uint32_t)*AUX_MU_LCR_REG);
+    // uart_send_string("\r\n");
+    // uart_send_hex((uint32_t)*AUX_MU_IER_REG);
+    // uart_send_string("\r\n");
+    // uart_send_hex((uint32_t)*ENABLE_IRQS1);
+    // uart_send_string("\r\n");
 }
 
 // 檢查是否為 GPU 中斷

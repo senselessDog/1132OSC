@@ -1,9 +1,15 @@
 define kernel
   file kernel8.elf
   target remote :1234
-  b switch_to_el0
-  b sync_lower_el_64_handler
-  b sync_lower_el_64_entry
+  # b async_io.c:12
+  # b uart_async_send_string
+  # b async_io.c:17
+  # b default_exception_handler
+  # b irq_exception_handler
+  # b irq_entry
+  # b uart_async_send_string
+  # b is_uart_interrupt
+  # b uart_irq_handler
 end
 
 define user

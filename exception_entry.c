@@ -1,11 +1,19 @@
 
 #include <stdint.h>
-void uart_send_string(char *str);
-void uart_send_hex(uint32_t value);
-void uart_send_int(int value);
+#include "uart.h"
+#include "gpu_interrupt.h"
+#define MMIO_BASE 0x3F000000
+#define IRQ_PENDING1 ((volatile uint32_t *)(MMIO_BASE + 0x0000B204))
 
-#define CORE0_IRQ_SOURCE ((volatile unsigned int *)(0x40000060))
+uint32_t is_core_timer_irq()
+{
+    return *CORE0_INTERRUPT_SOURCE == (1 << 1);
+}
 
+uint32_t is_uart_interrupt()
+{
+    return *IRQ_PENDING1 & (1 << 29);
+}
 void sync_lower_el_64_entry(void)
 {
     // Read exception-related registers
@@ -27,9 +35,24 @@ void sync_lower_el_64_entry(void)
 
     return;
 }
-void el0_irq_entry(void)
+
+void irq_entry(void)
 {
-    if (*CORE0_IRQ_SOURCE == (1 << 1)) // 檢查計時器中斷位
+    uint64_t spsr;
+    asm volatile("mrs %0, spsr_el1\n" : "=r"(spsr));
+
+    int from_el0 = ((spsr & 0xF) == 0x0);
+
+    if (is_gpu_interrupt())
+    {
+        // 檢查是否為 UART 中斷
+        if (is_uart_interrupt())
+        {
+            uart_irq_handler();
+        }
+        // 處理其他可能的 GPU 中斷...
+    }
+    else if (from_el0 && is_core_timer_irq()) // 檢查計時器中斷位
     {
         // uart_send_string("Timer IRQ!\r\n");
         //  get count and frequency
@@ -47,10 +70,6 @@ void el0_irq_entry(void)
         // set timeout to 2 seconds
         unsigned long next_timeout = 2 * freq;
         asm volatile("msr cntp_tval_el0, %0" ::"r"(next_timeout));
-    }
-    else
-    {
-        uart_send_string("Unknown IRQ!\r\n");
     }
     return;
 }

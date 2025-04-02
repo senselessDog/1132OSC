@@ -6,11 +6,12 @@ void async_io_test()
 {
     char buffer[256] = {0};
     int count = 0;
+    char counter[32];
 
     // 啟用 UART 中斷
-    uart_enable_interrupt();
-    uart_enable_rx_interrupt();
-    *AUX_MU_IER_REG |= (3 << 2);
+    asm volatile("msr DAIFClr, #0xf");
+    // uart_enable_rx_interrupt();
+    //*AUX_MU_IER_REG |= (3 << 2);
 
     // 顯示歡迎訊息
     uart_async_send_string("\r\n===== UART Asynchronous I/O Test =====\r\n");
@@ -46,19 +47,21 @@ void async_io_test()
             }
 
             // 簡單延遲（模擬其他任務）
-            for (int i = 0; i < 500000; i++)
+            for (int i = 0; i < 5000000; i++)
             {
                 asm volatile("nop");
             }
 
             // 每隔一段時間顯示計數器（演示其他任務可以並行執行）
             count++;
-            if (count % 20 == 0)
+            if (count % 50 == 0)
             {
                 char counter[32];
-                uart_async_send_string("\r\n[Background task: ");
-                uart_async_send_string(int2str(count));
-                uart_async_send_string("\r\n> ");
+                uart_async_send_string("\r\n");
+                uart_async_send_string("[Background task: ");
+                uart_async_send_string(int2str(count, counter));
+                uart_async_send_string("]\r\n");
+                uart_async_send_string("> ");
                 uart_async_send_string(buffer);
             }
         }

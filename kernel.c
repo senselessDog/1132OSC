@@ -15,7 +15,7 @@ void list_cpio_files(const char *archive);
 void uart_send_int(int value);
 void *simple_alloc(size_t size);
 int fdt_init(void *fdt_addr);
-//lab3
+// lab3
 void run_user(char *archive);
 // 從 DTB 中獲取 initramfs 信息的全局變量
 extern uint64_t g_initramfs_addr;
@@ -84,6 +84,7 @@ void shell()
                 uart_send_string("cat -show the file context\r\n");
                 uart_send_string("memAlloc <size> - allocate memory of given size\r\n");
                 uart_send_string("run <user program> - run user program on EL0\r\n");
+                uart_send_string("async_io - run async uart I/O test\r\n");
             }
             else if (strcmp(buffer, "hello") == 0)
             {
@@ -147,6 +148,11 @@ void shell()
                 uart_send_string("run user program on EL0\r\n");
                 run_user((char *)g_initramfs_addr);
             }
+            else if (strcmp(buffer, "async_io") == 0)
+            {
+                uart_send_string("Async I/O test\r\n");
+                async_io_test();
+            }
             else
             {
                 uart_send_string("Unknown command: ");
@@ -185,6 +191,7 @@ void shell()
 void kernel_main(void *dtb_addr)
 {
     // uart_init();
+    uart_enable_interrupt();
     print_core_id(); // 在 shell 啟動前打印核心 ID
     uart_send_hex((uint32_t)dtb_addr);
     uart_send_string("\r\n");

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "uart.h"
 
 // Function prototypes
 void uart_init();
@@ -7,34 +8,41 @@ char uart_recv();
 void uart_send_string(const char *str);
 void uart_send_hex(uint32_t value);
 
-// MMIO base address for peripherals
-#define MMIO_BASE 0x3F000000
+// constants
+char rx_buffer[BUFFER_SIZE];
+int rx_head;
+int rx_tail;
 
-// GPIO Function Select 1
-#define GPFSEL1 ((volatile uint32_t *)(MMIO_BASE + 0x00200004))
-// GPIO Pull-up/down Register
-#define GPPUD ((volatile uint32_t *)(MMIO_BASE + 0x00200094))
-// GPIO Pull-up/down Clock Register 0
-#define GPPUDCLK0 ((volatile uint32_t *)(MMIO_BASE + 0x00200098))
+char tx_buffer[BUFFER_SIZE];
+int tx_head;
+int tx_tail;
 
-// Auxiliary enables
-#define AUX_ENABLES ((volatile uint32_t *)(MMIO_BASE + 0x00215004))
-// Mini UART I/O Data
-#define AUX_MU_IO_REG ((volatile uint32_t *)(MMIO_BASE + 0x00215040))
-// Mini UART Interrupt Enable
-#define AUX_MU_IER_REG ((volatile uint32_t *)(MMIO_BASE + 0x00215044))
-// Mini UART Interrupt Identify
-#define AUX_MU_IIR_REG ((volatile uint32_t *)(MMIO_BASE + 0x00215048))
-// Mini UART Line Control
-#define AUX_MU_LCR_REG ((volatile uint32_t *)(MMIO_BASE + 0x0021504C))
-// Mini UART Modem Control
-#define AUX_MU_MCR_REG ((volatile uint32_t *)(MMIO_BASE + 0x00215050))
-// Mini UART Line Status
-#define AUX_MU_LSR_REG ((volatile uint32_t *)(MMIO_BASE + 0x00215054))
-// Mini UART Extra Control
-#define AUX_MU_CNTL_REG ((volatile uint32_t *)(MMIO_BASE + 0x00215060))
-// Mini UART Baudrate
-#define AUX_MU_BAUD_REG ((volatile uint32_t *)(MMIO_BASE + 0x00215068))
+// Check if buffer is full
+int is_buffer_full(int head, int tail)
+{
+    return ((head + 1) % BUFFER_SIZE) == tail;
+}
+
+// Check if buffer is empty
+int is_buffer_empty(int head, int tail)
+{
+    return head == tail;
+}
+
+// Add a byte to the buffer
+void buffer_push(char *buffer, int *head, char data)
+{
+    buffer[*head] = data;
+    *head = (*head + 1) % BUFFER_SIZE;
+}
+
+// Get a byte from the buffer
+char buffer_pop(char *buffer, int *tail)
+{
+    char data = buffer[*tail];
+    *tail = (*tail + 1) % BUFFER_SIZE;
+    return data;
+}
 
 void uart_init()
 {
@@ -59,9 +67,6 @@ void uart_init()
     // Enable mini UART
     *AUX_ENABLES |= 1;
 
-    // Disable interrupts
-    *AUX_MU_IER_REG = 0;
-
     // Set data size to 8 bits
     *AUX_MU_LCR_REG = 3;
 
@@ -73,9 +78,98 @@ void uart_init()
 
     // Clear FIFOs
     *AUX_MU_IIR_REG = 6;
-
+    // interrupts
+    *AUX_MU_IER_REG |= 0x0C;
     // Enable transmitter and receiver
     *AUX_MU_CNTL_REG = 3;
+
+    *ENABLE_IRQS1 |= (1 << 29);
+}
+
+// Asynchronous send (non-blocking)
+int uart_async_send(char c)
+{
+    // Check if buffer is full
+    if (is_buffer_full(tx_head, tx_tail))
+    {
+        return 0; // Buffer full, can't send
+    }
+
+    // Disable interrupts during critical section
+    // (You'll need to implement disable/enable interrupt functions)
+    // disable_interrupts();
+
+    // Add character to buffer
+    buffer_push(tx_buffer, &tx_head, c);
+
+    // Enable TX interrupts to start sending
+    uart_enable_tx_interrupt(); // Enable TX interrupts
+
+    // Re-enable interrupts
+    // enable_interrupts();
+
+    return 1; // Successfully queued
+}
+
+// Asynchronous send string
+void uart_async_send_string(const char *str)
+{
+    // uart_send_string("get into uart_async_send_string\r\n");
+    for (int i = 0; str[i] != '\0'; i++)
+    {
+        // uart_send(str[i]); // Send each character
+        //  Try until we can add to buffer
+        while (!uart_async_send(str[i]))
+        {
+            uart_send_string("\r\nfull\r\n");
+            // If buffer is full, we could yield here in a multitasking system
+            asm volatile("nop");
+        }
+    }
+}
+
+// Asynchronous receive (non-blocking)
+int uart_async_recv(char *c)
+{
+    // Check if buffer is empty
+    if (is_buffer_empty(rx_head, rx_tail))
+    {
+        return 0; // No data available
+    }
+
+    // Disable interrupts during critical section
+    // disable_interrupts();
+
+    // Get character from buffer
+    *c = buffer_pop(rx_buffer, &rx_tail);
+
+    // Re-enable interrupts
+    // enable_interrupts();
+
+    return 1; // Successfully received a character
+}
+
+void uart_enable_tx_interrupt()
+{
+    *AUX_MU_IER_REG |= (1 << 1);
+    // uart_send_string("Enable TX interrupt\r\n");
+    // uart_send_hex((uint32_t)*AUX_MU_IER_REG);
+    // uart_send_string("\r\n");
+}
+
+void uart_disable_tx_interrupt()
+{
+    *AUX_MU_IER_REG &= ~(1 << 1);
+}
+
+void uart_enable_rx_interrupt()
+{
+    *AUX_MU_IER_REG |= (1 << 0);
+}
+
+void uart_disable_rx_interrupt()
+{
+    *AUX_MU_IER_REG &= ~(1 << 0);
 }
 
 void uart_send(char c)

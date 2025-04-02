@@ -166,7 +166,8 @@ struct file_information find_program_in_initramfs(char *archive, const char *fil
         if (strcmp(ptr, "TRAILER!!!") == 0)
         {
             uart_send_string("Program not found in initramfs\r\n");
-            return;
+            struct file_information file_info = {NULL, 0};
+            return file_info;
         }
 
         // 取得檔案名稱長度與檔案大小
