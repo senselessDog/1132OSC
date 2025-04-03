@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "stdint.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "task_queue.h": "c",
+        "stdio.h": "c"
     }
 }

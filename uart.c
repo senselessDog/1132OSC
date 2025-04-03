@@ -136,7 +136,7 @@ int uart_async_recv(char *c)
     {
         return 0; // No data available
     }
-
+    uart_enable_rx_interrupt();
     // Disable interrupts during critical section
     // disable_interrupts();
 

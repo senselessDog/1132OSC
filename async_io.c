@@ -9,7 +9,7 @@ void async_io_test()
     char counter[32];
 
     // 啟用 UART 中斷
-    enable_interrupts();
+    // enable_interrupts();
     // uart_enable_rx_interrupt();
     //*AUX_MU_IER_REG |= (3 << 2);
 

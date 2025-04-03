@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <string.h>
-
+#include "uart.h"
+#include "gpu_interrupt.h"
+#include "task_queue.h"
 void uart_init();
 void uart_send_string(const char *str);
 char uart_recv();
@@ -17,6 +19,8 @@ void *simple_alloc(size_t size);
 int fdt_init(void *fdt_addr);
 // lab3
 void run_user(char *archive);
+void cmd_setTimeout(int argc, char **argv);
+void async_io_test();
 // 從 DTB 中獲取 initramfs 信息的全局變量
 extern uint64_t g_initramfs_addr;
 extern uint64_t g_initramfs_size;
@@ -206,7 +210,7 @@ void shell()
             if (index > 0)
             {
                 index--;
-                uart_send_string("\b "); // Handle backspace
+                uart_send_string(" \b"); // Handle backspace
             }
         }
         else
@@ -235,7 +239,7 @@ void kernel_main(void *dtb_addr)
     // 獲取 initramfs 地址和大小
     get_initramfs_info(dtb_addr);
     uart_send_string("[main] Finish DTB\r\n");
-
+    task_queue_init(&global_task_queue);
     uart_send_string("[main] start shell\r\n");
     shell();
     uart_send_string("[main] shell error\r\n");

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include "strcmp.h"
 
 struct file_information find_program_in_initramfs(char *archive, const char *filename);
 void uart_send_string(const char *str);

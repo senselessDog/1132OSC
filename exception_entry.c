@@ -2,8 +2,16 @@
 #include <stdint.h>
 #include "uart.h"
 #include "gpu_interrupt.h"
+#include "task_queue.h"
 #define MMIO_BASE 0x3F000000
 #define IRQ_PENDING1 ((volatile uint32_t *)(MMIO_BASE + 0x0000B204))
+
+// 定時器顯示數據結構
+typedef struct
+{
+    uint64_t count;
+    uint64_t freq;
+} timer_display_data_t;
 
 uint32_t is_core_timer_irq()
 {
@@ -35,25 +43,32 @@ void sync_lower_el_64_entry(void)
 
     return;
 }
+// 顯示定時器信息的任務處理函數 (for EL0)
+void display_timer_info(void *arg)
+{
+    timer_display_data_t *data = (timer_display_data_t *)arg;
+
+    // 計算並顯示啟動後的秒數
+    int seconds = data->count / data->freq;
+    uart_send_int(seconds);
+    uart_send_string(" seconds\r\n");
+}
 void lower_el_irq_entry(void)
 {
     if (is_core_timer_irq()) // 檢查計時器中斷位
     {
-        // uart_send_string("Timer IRQ!\r\n");
-        //  get count and frequency
-        unsigned long long count, freq;
-        asm volatile("mrs %0, cntpct_el0" : "=r"(count));
-        asm volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+        // 創建定時器顯示任務數據
+        timer_display_data_t *data = (timer_display_data_t *)simple_alloc(sizeof(timer_display_data_t));
 
-        // print the time since boot
-        int seconds = count / freq;
-        // uart_send_string("time since boot:");
-        // uart_send_string("Time since boot ");
-        uart_send_int(seconds);
-        uart_send_string(" seconds\r\n");
+        // 獲取當前計數和頻率
+        asm volatile("mrs %0, cntpct_el0" : "=r"(data->count));
+        asm volatile("mrs %0, cntfrq_el0" : "=r"(data->freq));
 
-        // set timeout to 2 seconds
-        unsigned long next_timeout = 2 * freq;
+        // 將任務加入佇列（優先級1）
+        enqueue_task(&global_task_queue, display_timer_info, data, 1);
+
+        // 設置下一個2秒的超時
+        unsigned long next_timeout = 2 * data->freq;
         asm volatile("msr cntp_tval_el0, %0" ::"r"(next_timeout));
     }
 }

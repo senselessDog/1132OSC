@@ -10,7 +10,8 @@ static size_t heap_index = 0;
 
 void *simple_alloc(size_t size)
 {
-    if (size%8!=0){
+    if (size % 8 != 0)
+    {
         size += 8 - (size % 8);
     }
     heap_size = &__heap_end - &__heap_start;
@@ -20,6 +21,6 @@ void *simple_alloc(size_t size)
         return NULL;
     }
     heap_index += size;
-    void *ptr = heap + heap_index;
+    void *ptr = heap + heap_index - size;
     return ptr;
 }
