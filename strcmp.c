@@ -152,3 +152,125 @@ char *int2str(int num, char *str)
 
     return str;
 }
+
+char *strtok(char *str, const char *delimiters)
+{
+    static char *last_token = NULL;
+    char *token_start;
+
+    // 如果 str 不為空，則從 str 開始
+    // 如果 str 為空，則從上次的位置繼續
+    if (str != NULL)
+    {
+        token_start = str;
+    }
+    else if (last_token != NULL)
+    {
+        token_start = last_token;
+    }
+    else
+    {
+        return NULL;
+    }
+
+    // 跳過開頭的分隔符
+    while (*token_start != '\0')
+    {
+        const char *d = delimiters;
+        int is_delimiter = 0;
+
+        while (*d != '\0')
+        {
+            if (*token_start == *d)
+            {
+                is_delimiter = 1;
+                break;
+            }
+            d++;
+        }
+
+        if (!is_delimiter)
+        {
+            break;
+        }
+
+        token_start++;
+    }
+
+    // 如果到了字串末尾，則返回 NULL
+    if (*token_start == '\0')
+    {
+        last_token = NULL;
+        return NULL;
+    }
+
+    // 找到下一個分隔符
+    char *token_end = token_start;
+    while (*token_end != '\0')
+    {
+        const char *d = delimiters;
+        int is_delimiter = 0;
+
+        while (*d != '\0')
+        {
+            if (*token_end == *d)
+            {
+                is_delimiter = 1;
+                break;
+            }
+            d++;
+        }
+
+        if (is_delimiter)
+        {
+            break;
+        }
+
+        token_end++;
+    }
+
+    // 如果找到分隔符，則標記為 '\0' 並更新 last_token
+    if (*token_end != '\0')
+    {
+        *token_end = '\0';
+        last_token = token_end + 1;
+    }
+    else
+    {
+        last_token = NULL;
+    }
+
+    return token_start;
+}
+
+int atoi(const char *str)
+{
+    int result = 0;
+    int sign = 1;
+
+    // 跳過空白字符
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')
+    {
+        str++;
+    }
+
+    // 處理符號
+    if (*str == '-')
+    {
+        sign = -1;
+        str++;
+    }
+    else if (*str == '+')
+    {
+        str++;
+    }
+
+    // 處理數字
+    while (*str >= '0' && *str <= '9')
+    {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    return sign * result;
+}

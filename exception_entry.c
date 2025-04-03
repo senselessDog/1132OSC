@@ -35,24 +35,9 @@ void sync_lower_el_64_entry(void)
 
     return;
 }
-
-void irq_entry(void)
+void lower_el_irq_entry(void)
 {
-    uint64_t spsr;
-    asm volatile("mrs %0, spsr_el1\n" : "=r"(spsr));
-
-    int from_el0 = ((spsr & 0xF) == 0x0);
-
-    if (is_gpu_interrupt())
-    {
-        // 檢查是否為 UART 中斷
-        if (is_uart_interrupt())
-        {
-            uart_irq_handler();
-        }
-        // 處理其他可能的 GPU 中斷...
-    }
-    else if (from_el0 && is_core_timer_irq()) // 檢查計時器中斷位
+    if (is_core_timer_irq()) // 檢查計時器中斷位
     {
         // uart_send_string("Timer IRQ!\r\n");
         //  get count and frequency
@@ -71,5 +56,28 @@ void irq_entry(void)
         unsigned long next_timeout = 2 * freq;
         asm volatile("msr cntp_tval_el0, %0" ::"r"(next_timeout));
     }
+}
+void irq_entry(void)
+{
+    // asm volatile("msr DAIFSet, 0xf");
+    // uint64_t spsr;
+    // asm volatile("mrs %0, spsr_el1\n" : "=r"(spsr));
+
+    // int from_el0 = ((spsr & 0xF) == 0x0);
+    if (is_core_timer_irq())
+    {
+        // 處理計時器中斷
+        timer_interrupt_handler();
+    }
+    if (is_gpu_interrupt())
+    {
+        // 檢查是否為 UART 中斷
+        if (is_uart_interrupt())
+        {
+            uart_irq_handler();
+        }
+        // 處理其他可能的 GPU 中斷...
+    }
+    // asm volatile("msr DAIFClr, 0xf");
     return;
 }

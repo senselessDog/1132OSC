@@ -10,6 +10,7 @@ define kernel
   # b uart_async_send_string
   # b is_uart_interrupt
   # b uart_irq_handler
+  b timer_interrupt_handler
 end
 
 define user

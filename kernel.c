@@ -43,7 +43,18 @@ void print_core_id()
     uart_send_string("\r\n");
     uart_send_string("Core list -----\r\n");
 }
+// 將輸入緩衝區分割成多個參數
+void parse_arguments(char *buffer, char *argv[], int *argc)
+{
+    *argc = 0;
+    char *token = strtok(buffer, " ");
 
+    while (token != NULL && *argc < 10)
+    { // 限制最多 10 個參數
+        argv[(*argc)++] = token;
+        token = strtok(NULL, " ");
+    }
+}
 void shell()
 {
     char buffer[256];
@@ -69,7 +80,18 @@ void shell()
                 continue;
             }
 
-            if (strcmp(buffer, "help") == 0)
+            // 解析參數
+            char *argv[10];
+            int argc = 0;
+            parse_arguments(buffer, argv, &argc);
+
+            if (argc == 0)
+            {
+                uart_send_string("> ");
+                continue;
+            }
+
+            if (strcmp(argv[0], "help") == 0)
             {
                 uart_send_string("Available commands:\r\n");
                 uart_send_string("help - print all available commands\r\n");
@@ -85,54 +107,47 @@ void shell()
                 uart_send_string("memAlloc <size> - allocate memory of given size\r\n");
                 uart_send_string("run <user program> - run user program on EL0\r\n");
                 uart_send_string("async_io - run async uart I/O test\r\n");
+                // lab3 Advanced 1
+                uart_send_string("setTimeout <message> <seconds> - display message after specified seconds\r\n");
             }
-            else if (strcmp(buffer, "hello") == 0)
+            else if (strcmp(argv[0], "hello") == 0)
             {
                 uart_send_string("Hello World!\r\n");
             }
-            else if (strcmp(buffer, "modinfo") == 0)
+            else if (strcmp(argv[0], "modinfo") == 0)
             {
                 get_board_revision();
                 get_arm_memory();
             }
-            else if (strcmp(buffer, "boardrev") == 0)
+            else if (strcmp(argv[0], "boardrev") == 0)
             {
                 get_board_revision();
             }
-            else if (strcmp(buffer, "armmem") == 0)
+            else if (strcmp(argv[0], "armmem") == 0)
             {
                 get_arm_memory();
             }
-            else if (strcmp(buffer, "coreid") == 0)
+            else if (strcmp(argv[0], "coreid") == 0)
             {
                 print_core_id();
             }
-            else if (strcmp(buffer, "reboot") == 0)
+            else if (strcmp(argv[0], "reboot") == 0)
             {
                 reset(10); // 10 ticks
             }
-            else if (strcmp(buffer, "ls") == 0)
+            else if (strcmp(argv[0], "ls") == 0)
             {
-                // char file_buffer[1024];
-                // uart_send_string("Start list\r\n");
-                // uart_send_hex((uint32_t)g_initramfs_addr);
-                // uart_send_string("\r\n");
-                // uart_send_string((char *)g_initramfs_addr);
-                // uart_send_string("\r\n");
                 list_cpio_files((char *)g_initramfs_addr);
-                //  uart_send_string(file_buffer);
                 uart_send_string("\r\n");
             }
-            else if (strcmp(buffer, "cat") == 0)
+            else if (strcmp(argv[0], "cat") == 0)
             {
-                // char file_buffer[1024];
                 parse_cpio_archive((char *)g_initramfs_addr);
-                // uart_send_string(file_buffer);
                 uart_send_string("\r\n");
             }
-            else if (strncmp(buffer, "memAlloc ", 9) == 0)
+            else if (strcmp(argv[0], "memAlloc") == 0 && argc > 1)
             {
-                size_t size = strtol(buffer + 9, NULL, 10);
+                size_t size = strtol(argv[1], NULL, 10);
                 uart_send_int((int)size);
                 uart_send_string("\r\n");
                 void *ptr = simple_alloc(size);
@@ -143,20 +158,33 @@ void shell()
                     uart_send_string("\r\n");
                 }
             }
-            else if (strcmp(buffer, "run") == 0)
+            else if (strcmp(argv[0], "run") == 0)
             {
                 uart_send_string("run user program on EL0\r\n");
                 run_user((char *)g_initramfs_addr);
             }
-            else if (strcmp(buffer, "async_io") == 0)
+            else if (strcmp(argv[0], "async_io") == 0)
             {
                 uart_send_string("Async I/O test\r\n");
                 async_io_test();
             }
+            // 添加 setTimeout 命令
+            else if (strcmp(argv[0], "setTimeout") == 0)
+            {
+                if (argc != 3)
+                {
+                    uart_send_string("Usage: setTimeout <message> <seconds>\r\n");
+                }
+                else
+                {
+                    // 調用 cmd_setTimeout 函數處理命令
+                    cmd_setTimeout(argc, argv);
+                }
+            }
             else
             {
                 uart_send_string("Unknown command: ");
-                uart_send_string(buffer);
+                uart_send_string(argv[0]);
                 uart_send_string("\r\n");
             }
 
@@ -178,7 +206,7 @@ void shell()
             if (index > 0)
             {
                 index--;
-                uart_send_string("\b \b"); // Handle backspace
+                uart_send_string("\b "); // Handle backspace
             }
         }
         else
@@ -192,6 +220,7 @@ void kernel_main(void *dtb_addr)
 {
     // uart_init();
     uart_enable_interrupt();
+    enable_interrupts();
     print_core_id(); // 在 shell 啟動前打印核心 ID
     uart_send_hex((uint32_t)dtb_addr);
     uart_send_string("\r\n");

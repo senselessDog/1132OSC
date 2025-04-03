@@ -9,7 +9,7 @@ void async_io_test()
     char counter[32];
 
     // 啟用 UART 中斷
-    asm volatile("msr DAIFClr, #0xf");
+    enable_interrupts();
     // uart_enable_rx_interrupt();
     //*AUX_MU_IER_REG |= (3 << 2);
 
@@ -30,7 +30,7 @@ void async_io_test()
         // 讀取命令直到按下 Enter
         char c = 0;
         int pos = 0;
-
+        uart_enable_rx_interrupt();
         while (c != '\r' && c != '\n')
         {
             // 非阻塞等待數據

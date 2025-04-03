@@ -16,7 +16,7 @@ struct file_information
 };
 #define CORE0_TIMER_IRQ_CTRL 0x40000040
 
-void core_timer_enable(void)
+void el0_core_timer_enable(void)
 {
     // mov x0, 1
     // msr cntp_ctl_el0, x0 // enable
@@ -37,7 +37,7 @@ void core_timer_enable(void)
 void switch_to_el0(void *start_addr, void *stack_ptr)
 {
     // perpare for this function
-    core_timer_enable();
+    el0_core_timer_enable();
     asm volatile(
         "msr spsr_el1, %0\n"
         "msr elr_el1, %1\n"

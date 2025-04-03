@@ -20,7 +20,7 @@ BOOTLOADER_ELF_TARGET = bootloader.elf
 # Define source files
 KERNEL_SRCS = boot_kernel.S kernel.c uart.c strcmp.c mailbox.c \
 		power.c cpio.c alloc.c devicetree.c \
-		run_userprogram.c exception_entry.c exception.S async_io.c gpu_interrupt.c
+		run_userprogram.c exception_entry.c exception.S async_io.c gpu_interrupt.c timeout.c
 BOOTLOADER_SRCS = boot_bootloader.S bootloader.c uart.c strcmp.c
 USER_SRCS = user/userProcessStatus.S
 # Define object files

@@ -1,6 +1,14 @@
 #include <stdint.h>
 #include "uart.h"
 
+void disable_interrupts()
+{
+    asm volatile("msr DAIFSet, #0xf");
+}
+void enable_interrupts()
+{
+    asm volatile("msr DAIFClr, #0xf");
+}
 // 啟用 UART 中斷
 void uart_enable_interrupt()
 {
