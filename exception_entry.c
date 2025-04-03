@@ -6,6 +6,7 @@
 #define MMIO_BASE 0x3F000000
 #define IRQ_PENDING1 ((volatile uint32_t *)(MMIO_BASE + 0x0000B204))
 
+#define CORE0_INTERRUPT_SOURCE ((volatile uint32_t *)(0x40000060))
 // 定時器顯示數據結構
 typedef struct
 {
@@ -13,11 +14,13 @@ typedef struct
     uint64_t freq;
 } timer_display_data_t;
 
+void empty()
+{
+}
 uint32_t is_core_timer_irq()
 {
     return *CORE0_INTERRUPT_SOURCE == (1 << 1);
 }
-
 uint32_t is_uart_interrupt()
 {
     return *IRQ_PENDING1 & (1 << 29);
@@ -42,6 +45,26 @@ void sync_lower_el_64_entry(void)
     uart_send_string("\r\n");
 
     return;
+}
+
+void el1_irq_entry(void)
+{
+    // uart_send_string("EL1 IRQ taken!\r\n");
+    empty();
+    if (is_core_timer_irq())
+    {
+        // 處理計時器中斷
+        timer_interrupt_handler();
+    }
+    if (is_gpu_interrupt())
+    {
+        // 檢查是否為 UART 中斷
+        if (is_uart_interrupt())
+        {
+            uart_irq_handler();
+        }
+        // 處理其他可能的 GPU 中斷...
+    }
 }
 // 顯示定時器信息的任務處理函數 (for EL0)
 void display_timer_info(void *arg)
@@ -71,28 +94,4 @@ void lower_el_irq_entry(void)
         unsigned long next_timeout = 2 * data->freq;
         asm volatile("msr cntp_tval_el0, %0" ::"r"(next_timeout));
     }
-}
-void irq_entry(void)
-{
-    // asm volatile("msr DAIFSet, 0xf");
-    // uint64_t spsr;
-    // asm volatile("mrs %0, spsr_el1\n" : "=r"(spsr));
-
-    // int from_el0 = ((spsr & 0xF) == 0x0);
-    if (is_core_timer_irq())
-    {
-        // 處理計時器中斷
-        timer_interrupt_handler();
-    }
-    if (is_gpu_interrupt())
-    {
-        // 檢查是否為 UART 中斷
-        if (is_uart_interrupt())
-        {
-            uart_irq_handler();
-        }
-        // 處理其他可能的 GPU 中斷...
-    }
-    // asm volatile("msr DAIFClr, 0xf");
-    return;
 }

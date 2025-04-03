@@ -223,8 +223,6 @@ void shell()
 void kernel_main(void *dtb_addr)
 {
     // uart_init();
-    uart_enable_interrupt();
-    enable_interrupts();
     print_core_id(); // 在 shell 啟動前打印核心 ID
     uart_send_hex((uint32_t)dtb_addr);
     uart_send_string("\r\n");
@@ -241,6 +239,8 @@ void kernel_main(void *dtb_addr)
     uart_send_string("[main] Finish DTB\r\n");
     task_queue_init(&global_task_queue);
     uart_send_string("[main] start shell\r\n");
+    uart_enable_interrupt();
+    enable_interrupts();
     shell();
     uart_send_string("[main] shell error\r\n");
     while (1)

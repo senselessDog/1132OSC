@@ -52,13 +52,16 @@
 default_exception_handler:
     eret
 
-/*
-    el0_irq_exception_handler:
+el1_irq_exception_handler:
+    //msr DAIFSet, 0xf
     save_all                    // 保存上下文，使用之前定義的save_all宏
-    bl el0_irq_entry                // 調用C函數處理IRQ
+    bl el1_irq_entry                // 調用C函數處理IRQ
+    // 处理任务队列中的任务
+    bl process_task_queue
     load_all                    // 恢復上下文
+    //msr DAIFClr, 0xf
     eret                        // 返回中斷點
-*/
+
 sync_lower_el_64_handler:
     // 先確保使用 SP_EL1
     msr DAIFSet, 0xf
@@ -77,15 +80,7 @@ lower_el_irq_exception_handler:
     msr DAIFClr, 0xf
     eret                        // 返回中斷點
 
-irq_exception_handler:
-    //msr DAIFSet, 0xf
-    save_all                    // 保存上下文，使用之前定義的save_all宏
-    bl irq_entry                // 調用C函數處理IRQ
-    // 处理任务队列中的任务
-    bl process_task_queue
-    load_all                    // 恢復上下文
-    //msr DAIFClr, 0xf
-    eret                        // 返回中斷點
+
 
 .align 11                      // vector table should be aligned to 0x800
 .global exception_vector_table
@@ -100,7 +95,7 @@ exception_vector_table:
     .align 7
     b default_exception_handler        // Current EL with SP_ELx - Synchronous
     .align 7
-    b irq_exception_handler        // Current EL with SP_ELx - IRQ
+    b el1_irq_exception_handler        // Current EL with SP_ELx - IRQ
     .align 7
     b default_exception_handler        // Current EL with SP_ELx - FIQ
     .align 7

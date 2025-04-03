@@ -35,6 +35,7 @@
 // 第一級中斷控制器
 #define CORE0_INTERRUPT_SOURCE ((volatile uint32_t *)(0x40000060))
 #define GPU_INTERRUPTS 0x100 // 位元 8 代表 GPU 中斷
+
 // 第二級中斷控制器寄存器
 #define ENABLE_IRQS1 ((volatile uint32_t *)(MMIO_BASE + 0x0000B210))
 #define IRQ_PENDING1 ((volatile uint32_t *)(MMIO_BASE + 0x0000B204))

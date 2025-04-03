@@ -47,7 +47,7 @@ void async_io_test()
             }
 
             // 簡單延遲（模擬其他任務）
-            for (int i = 0; i < 5000000; i++)
+            for (int i = 0; i < 200000; i++)
             {
                 asm volatile("nop");
             }
@@ -57,12 +57,12 @@ void async_io_test()
             if (count % 50 == 0)
             {
                 char counter[32];
-                uart_async_send_string("\r\n");
-                uart_async_send_string("[Background task: ");
-                uart_async_send_string(int2str(count, counter));
-                uart_async_send_string("]\r\n");
-                uart_async_send_string("> ");
-                uart_async_send_string(buffer);
+                uart_send_string("\r\n");
+                uart_send_string("[Background task: ");
+                uart_send_string(int2str(count, counter));
+                uart_send_string("]\r\n");
+                uart_send_string("> ");
+                uart_send_string(buffer);
             }
         }
 
