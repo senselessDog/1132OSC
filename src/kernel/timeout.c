@@ -127,6 +127,7 @@ void timer_interrupt_handler()
 {
     // 檢查計時器隊列
     // 檢查是否有過期的定時器
+    //uart_send_string("Timer interrupt handler\r\n");
     if (timer_queue != NULL)
     {
         uint64_t current_time;

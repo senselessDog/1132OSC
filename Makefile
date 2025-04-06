@@ -17,25 +17,27 @@ KERNEL_ELF_TARGET = kernel8.elf
 BOOTLOADER_TARGET = bootloader.img
 BOOTLOADER_ELF_TARGET = bootloader.elf
 
-# Define source files
-KERNEL_SRCS = boot_kernel.S kernel.c uart.c strcmp.c mailbox.c \
-		power.c cpio.c alloc.c devicetree.c \
-		run_userprogram.c exception_entry.c exception.S async_io.c gpu_interrupt.c timeout.c task_queue.c
-BOOTLOADER_SRCS = boot_bootloader.S bootloader.c uart.c strcmp.c
-USER_SRCS = user/userProcessStatus.S
+# Define source files with new paths
+KERNEL_SRCS = $(wildcard src/kernel/*.c) $(wildcard src/kernel/*.S) $(wildcard src/lib/*.c) \
+				$(wildcard boot/kernel/*.S)
+# boot/boot_kernel.S kernel/kernel.c lib/uart.c lib/strcmp.c kernel/mailbox.c \
+# lab2: kernel/power.c kernel/cpio.c kernel/alloc.c kernel/devicetree.c \
+# lab3: kernel/run_userprogram.c kernel/exception_entry.c boot/exception.S \
+# 		kernel/async_io.c kernel/gpu_interrupt.c kernel/timeout.c kernel/task_queue.c
+
+BOOTLOADER_SRCS = $(wildcard src/bootloader/*.c) $(wildcard src/lib/*.c) $(wildcard boot/bootloader/*.S)
+# boot/bootloader.S lib/uart.c lib/strcmp.c
 # Define object files
 KERNEL_OBJS = $(KERNEL_SRCS:.S=.o)
 KERNEL_OBJS := $(KERNEL_OBJS:.c=.o)
 BOOTLOADER_OBJS = $(BOOTLOADER_SRCS:.S=.o)
 BOOTLOADER_OBJS := $(BOOTLOADER_OBJS:.c=.o)
-#user program object files
-USER_OBJS = $(USER_SRCS:.S=.o)
 # Linker scripts
-KERNEL_LD_SCRIPT = linker_kernel.ld
-BOOTLOADER_LD_SCRIPT = linker_bootloader.ld
+KERNEL_LD_SCRIPT = boot/kernel/linker_kernel.ld
+BOOTLOADER_LD_SCRIPT = boot/bootloader/linker_bootloader.ld
 
 # Default target
-all: $(KERNEL_TARGET) $(BOOTLOADER_TARGET) #$(USER_OBJS)
+all: $(KERNEL_TARGET) $(BOOTLOADER_TARGET) 
 
 # Generate kernel image
 $(KERNEL_TARGET): $(KERNEL_ELF_TARGET)
@@ -63,6 +65,5 @@ $(BOOTLOADER_ELF_TARGET): $(BOOTLOADER_OBJS) $(BOOTLOADER_LD_SCRIPT)
 
 # Clean up generated files
 clean:
-	rm -f $(KERNEL_TARGET) $(KERNEL_ELF_TARGET) $(BOOTLOADER_TARGET) $(BOOTLOADER_ELF_TARGET) $(KERNEL_OBJS) $(BOOTLOADER_OBJS)
-# rm -f $(USER_OBJS)
-
+	rm -f $(KERNEL_TARGET) $(KERNEL_ELF_TARGET) $(BOOTLOADER_TARGET) $(BOOTLOADER_ELF_TARGET)
+	find . -name "*.o" -type f -delete

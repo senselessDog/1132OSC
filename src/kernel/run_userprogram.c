@@ -32,7 +32,7 @@ void el0_core_timer_enable(void)
     // mov x0, 2
     // ldr x1, =CORE0_TIMER_IRQ_CTRL
     // str w0, [x1] // unmask timer interrupt
-    uint32_t *ctrl_reg = (uint32_t *)CORE0_TIMER_IRQ_CTRL;
+    uint32_t *ctrl_reg = (volatile uint32_t *)CORE0_TIMER_IRQ_CTRL;
     *ctrl_reg = 2;
 }
 void switch_to_el0(void *start_addr, void *stack_ptr)

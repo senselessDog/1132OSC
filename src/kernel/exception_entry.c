@@ -47,7 +47,7 @@ void sync_lower_el_64_entry(void)
     return;
 }
 
-void el1_irq_entry(void)
+void el1_irq_entry(uint64_t spsr)
 {
     // uart_send_string("EL1 IRQ taken!\r\n");
     //empty();
@@ -93,5 +93,7 @@ void lower_el_irq_entry(void)
         // 設置下一個2秒的超時
         unsigned long next_timeout = 2 * data->freq;
         asm volatile("msr cntp_tval_el0, %0" ::"r"(next_timeout));
+        asm volatile("mov x0, #1");
+        asm volatile("msr cntp_ctl_el0, x0");
     }
 }
