@@ -18,20 +18,20 @@ SECTIONS
     .data : {
         *(.data)
     }
-    . = ALIGN(8);
+    . = ALIGN(16);
     .bss (NOLOAD): {
         __bss_start = .;
         *(.bss)
         __bss_end = .;
     }
 
-    . = ALIGN(8);
+    . = ALIGN(16);
     .heap (NOLOAD) : {
         __heap_start = .;
         . += 0x10000; /* 1 MB heap size */
         __heap_end = .;
     }
 
-    . = ALIGN(8);
+    . = ALIGN(16);
     _stack_top = . + 0x10000;
 }

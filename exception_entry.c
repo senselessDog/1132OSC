@@ -50,7 +50,7 @@ void sync_lower_el_64_entry(void)
 void el1_irq_entry(void)
 {
     // uart_send_string("EL1 IRQ taken!\r\n");
-    empty();
+    //empty();
     if (is_core_timer_irq())
     {
         // 處理計時器中斷
