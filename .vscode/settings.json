@@ -4,6 +4,7 @@
         "string.h": "c",
         "task_queue.h": "c",
         "stdio.h": "c",
-        "buddy_alloc.h": "c"
+        "buddy_alloc.h": "c",
+        "stdlib.h": "c"
     }
 }

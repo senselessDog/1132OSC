@@ -4,11 +4,10 @@
 
 // Constants
 #define PAGE_SIZE 4096  // 4KB page size
-#define MAX_ORDER 10    // Maximum order for the buddy system (2^10 * 4KB = 4MB max allocation)
-#define BUDDY_METADATA_ADDR 0x10000000  // Start address for metadata
-#define BUDDY_MEMORY_START 0x11000000   // Start address for allocatable memory
-#define BUDDY_MEMORY_END 0x20000000     // End address for allocatable memory
-
+#define MAX_ORDER 14    // Maximum order for the buddy system (2^10 * 4KB = 4MB max allocation)
+#define BUDDY_METADATA_ADDR 0x11000000  // Start address for metadata
+#define BUDDY_MEMORY_START 0x12000000   // Start address for allocatable memory
+#define BUDDY_MEMORY_END 0x180000000     // End address for allocatable memory
 // Status values for blocks
 #define BLOCK_SPLIT -3      // Block is split into smaller blocks
 #define BLOCK_BELONGS -2    // Block belongs to a larger block
@@ -39,4 +38,22 @@ void buddy_free(void* addr);
 void buddy_split(int order, int start_idx, int requested_order);
 void mark_allocated(int order, int start_idx);
 //int find_block_order(void* addr);
-//void print_buddy_status(void);
+//dynamic memory allocation
+// Define the number of pools and their sizes
+#define NUM_POOLS 7
+const size_t POOL_SIZES[NUM_POOLS] = {16, 32, 64, 128, 512, 1024, 2048};  // Note: You had 196 but I think you meant 96
+
+// For tracking free blocks in each pool
+typedef struct block_header {
+    void* address; // Pointer to the start of the block
+    struct block_header* next;  // Pointer to next free block
+} block_header_t;
+
+// Array of free lists, one for each pool size
+block_header_t* free_lists[NUM_POOLS];
+
+// To track which pool a page belongs to (-1 if page is directly from buddy allocator)
+int pool_page_addr[(1 << (19 - 1))];
+
+// Count of free blocks in each pool
+int free_list_counts[NUM_POOLS];

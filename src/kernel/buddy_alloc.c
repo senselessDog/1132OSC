@@ -417,31 +417,129 @@ void buddy_free(void* addr) {
     uart_send_string("Free operation completed\r\n");
 }
 
-// Print the status of the buddy system
-// void print_buddy_status(void) {
-//     uart_send_string("\n--- Buddy System Status ---\n");
+void init_dynamic_allocator() {
+    // Initialize all free lists to NULL
+    for (int i = 0; i < NUM_POOLS; i++) {
+        free_lists[i] = NULL;
+        free_list_counts[i] = 0;
+    }
     
-//     for (int order = 0; order < MAX_ORDER; order++) {
-//         int free_blocks = 0;
-//         int total_blocks = buddy_system->total_pages / (1 << order);
-        
-//         printf("Order %d (size %d KB):\n", order, (1 << order) * 4);
-        
-//         if (buddy_system->first_avail[order] != -1) {
-//             printf("  Free blocks: ");
-//             buddy_block_list_t* block = &buddy_system->buddy_list[order][buddy_system->first_avail[order]];
-//             while (block != NULL) {
-//                 int idx = (block - buddy_system->buddy_list[order]);
-//                 printf("%d ", idx);
-//                 free_blocks++;
-//                 block = block->next;
-//             }
-//             printf("\n");
-//         }
-        
-//         printf("  Total blocks: %d, Free: %d, Used/Split: %d\n", 
-//                total_blocks, free_blocks, total_blocks - free_blocks);
-//     }
+    // Initialize the pool page tracking array
+    for (int i = 0; i < (1 << (MAX_ORDER - 1)); i++) {
+        pool_page_addr[i] = -1;  // -1 indicates not part of any pool
+    }
+}
+
+// dynamic_malloc function modified version
+void* dynamic_malloc(size_t size) {
+    // For large allocations, use buddy system directly
+    if (size > POOL_SIZES[NUM_POOLS - 1]) {
+        void* mem = buddy_malloc(size);
+        uart_send_string("Large allocation: requested ");
+        uart_send_int(size);
+        uart_send_string(" bytes, use buddy_malloc\r\n");
+        return mem;
+    }
     
-//     printf("-------------------------\n\n");
-// }
+    // Find appropriate pool
+    int pool_index = -1;
+    for (int i = 0; i < NUM_POOLS; i++) {
+        if (POOL_SIZES[i] >= size) {
+            pool_index = i;
+            break;
+        }
+    }
+    
+    // Check if there are available blocks
+    if (free_list_counts[pool_index] == 0) {
+        // No free blocks, allocate a new page
+        void* new_page = buddy_malloc(PAGE_SIZE);
+        
+        // Calculate how many blocks can fit in one page
+        int block_size = POOL_SIZES[pool_index];
+        int blocks_per_page = PAGE_SIZE / block_size;
+        
+        // Update page tracking
+        int page_index = ((int)(new_page - BUDDY_MEMORY_START)) / PAGE_SIZE;
+        pool_page_addr[page_index] = pool_index;
+        
+        // Split the page into blocks and add to free list
+        for (int i = 0; i < blocks_per_page; i++) {
+            // Allocate space for block_header using simple_alloc
+            block_header_t* block_header = (block_header_t*)simple_alloc(sizeof(block_header_t));
+            
+            // Set the address of the actual memory block
+            block_header->address = (char*)new_page + i * block_size;
+            
+            // Add to free list
+            block_header->next = free_lists[pool_index];
+            free_lists[pool_index] = block_header;
+            free_list_counts[pool_index]++;
+        }
+        
+        uart_send_string("Created new pool: size ");
+        uart_send_int(block_size);
+        uart_send_string(", ");
+        uart_send_int(blocks_per_page);
+        uart_send_string(" blocks at page 0x");
+        uart_send_hex((uint32_t)new_page);
+        uart_send_string("\r\n");
+    }
+    
+    // Now take a block from the free list
+    block_header_t* allocated_header = free_lists[pool_index];
+    free_lists[pool_index] = allocated_header->next;
+    free_list_counts[pool_index]--;
+    
+    // Get the actual memory address to return
+    void* allocated_memory = allocated_header->address;
+    
+    // The block_header could be saved somewhere for later use in free
+    // Or simply create a new one during free operation
+    
+    uart_send_string("Small allocation: requested ");
+    uart_send_int(size);
+    uart_send_string(" bytes, allocated ");
+    uart_send_int(POOL_SIZES[pool_index]);
+    uart_send_string(" bytes at address 0x");
+    uart_send_hex((uint32_t)allocated_memory);
+    uart_send_string("\r\n");
+    
+    return allocated_memory;
+}
+
+
+void dynamic_free(void* ptr) {
+    if (ptr == NULL) return;
+    
+    // Calculate which page this address belongs to
+    uint32_t addr = (uint32_t)ptr;
+    int page_index = (addr - BUDDY_MEMORY_START) / PAGE_SIZE;
+    
+    // Check if this address is from a pool or directly from buddy
+    if (page_index >= 0 && page_index < (1 << (MAX_ORDER - 1)) && pool_page_addr[page_index] != -1) {
+        // This is a small allocation from a pool
+        int pool_index = pool_page_addr[page_index];
+        
+        // Create a new block_header for this address
+        block_header_t* block = (block_header_t*)simple_alloc(sizeof(block_header_t));
+        block->address = ptr;
+        
+        // Add it back to the free list
+        block->next = free_lists[pool_index];
+        free_lists[pool_index] = block;
+        free_list_counts[pool_index]++;
+        
+        uart_send_string("Freed small block at 0x");
+        uart_send_hex((uint32_t)ptr);
+        uart_send_string(" to pool size ");
+        uart_send_int(POOL_SIZES[pool_index]);
+        uart_send_string("\r\n");
+    } else {
+        // This is a direct allocation from buddy system
+        buddy_free(ptr);
+        uart_send_string("Freed large block at 0x");
+        uart_send_hex((uint32_t)ptr);
+        uart_send_string(" back to buddy system\r\n");
+    }
+}

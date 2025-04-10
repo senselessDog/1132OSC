@@ -115,7 +115,7 @@ void shell()
                 uart_send_string("setTimeout <message> <seconds> - display message after specified seconds\r\n");
                 //lab4
                 uart_send_string("mem_alloc <size> - allocate memory using buddy allocator\r\n");
-                uart_send_string("free <address> -free memory\r\n");
+                uart_send_string("free <address> -free memory using buddy allocator\r\n");
             }
             else if (strcmp(argv[0], "hello") == 0)
             {
@@ -191,7 +191,7 @@ void shell()
             else if (strcmp(argv[0], "mem_alloc") == 0)
             {
                 size_t size = strtol(argv[1], NULL, 10);
-                void * ptr=buddy_malloc(size);
+                void * ptr=dynamic_malloc(size);
                 uart_send_string("[main] Memory allocated at address: ");
                 uart_send_hex((uint32_t)ptr);
                 uart_send_string("\r\n");
@@ -206,7 +206,7 @@ void shell()
                 else
                 {
                     void *addr = (void *)strtol(argv[1], NULL, 16);
-                    buddy_free(addr);
+                    dynamic_free(addr);
                     uart_send_string("[main] Memory freed at address: ");
                     uart_send_hex((uint32_t)addr);
                     uart_send_string("\r\n");
