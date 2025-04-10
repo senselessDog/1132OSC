@@ -1,18 +1,8 @@
 define kernel
   file kernel8.elf
   target remote :1234
-  # b async_io.c:12
-  # b uart_async_send_string
-  # b async_io.c:17
-  # b default_exception_handler
-  # b irq_exception_handler
-  # b irq_entry
-  # b uart_async_send_string
-  # b is_uart_interrupt
-  # b uart_irq_handler
-  # b timer_interrupt_handler
-  # b timeout.c:102
-  # b get_highest_priority_task
+  b buddy_alloc.c:311
+  b buddy_alloc.c:339
 end
 
 define user

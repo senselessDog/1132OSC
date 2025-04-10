@@ -3,6 +3,7 @@
         "stdint.h": "c",
         "string.h": "c",
         "task_queue.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "buddy_alloc.h": "c"
     }
 }

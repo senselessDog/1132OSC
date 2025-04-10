@@ -67,3 +67,13 @@ $(BOOTLOADER_ELF_TARGET): $(BOOTLOADER_OBJS) $(BOOTLOADER_LD_SCRIPT)
 clean:
 	rm -f $(KERNEL_TARGET) $(KERNEL_ELF_TARGET) $(BOOTLOADER_TARGET) $(BOOTLOADER_ELF_TARGET)
 	find . -name "*.o" -type f -delete
+
+qemu:
+	qemu-system-aarch64 -machine raspi3b -kernel bootloader.img -nographic -serial null -serial pty -initrd initramfs.cpio -dtb bcm2710-rpi-3-b-plus.dtb -S -s
+
+show_qemu:
+	sudo minicom -D /dev/pts/7 -b 115200
+gdb_init:
+	gdb-multiarch -x .gdbinit
+python:
+	/bin/python3 /home/kuan/lab/lab4/script/upload_kernel.py

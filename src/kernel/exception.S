@@ -55,7 +55,6 @@ default_exception_handler:
 el1_irq_exception_handler:
     //msr DAIFSet, 0xf
     save_all                    // 保存上下文，使用之前定義的save_all宏
-    mrs x0, spsr_el1        // Pass SPSR to your handler
     bl el1_irq_entry        // Modified to accept SPSR parameter
     // 处理任务队列中的任务
     bl process_task_queue

@@ -108,11 +108,14 @@ void shell()
                 uart_send_string("reboot - reboot the system\r\n");
                 uart_send_string("ls - list the filename\r\n");
                 uart_send_string("cat -show the file context\r\n");
-                uart_send_string("memAlloc <size> - allocate memory of given size\r\n");
+                uart_send_string("simple_alloc <size> - allocate memory of given size\r\n");
+                // lab3
                 uart_send_string("run <user program> - run user program on EL0\r\n");
                 uart_send_string("async_io - run async uart I/O test\r\n");
-                // lab3 Advanced 1
                 uart_send_string("setTimeout <message> <seconds> - display message after specified seconds\r\n");
+                //lab4
+                uart_send_string("mem_alloc <size> - allocate memory using buddy allocator\r\n");
+                uart_send_string("free <address> -free memory\r\n");
             }
             else if (strcmp(argv[0], "hello") == 0)
             {
@@ -149,7 +152,7 @@ void shell()
                 parse_cpio_archive((char *)g_initramfs_addr);
                 uart_send_string("\r\n");
             }
-            else if (strcmp(argv[0], "memAlloc") == 0 && argc > 1)
+            else if (strcmp(argv[0], "simple_alloc") == 0 && argc > 1)
             {
                 size_t size = strtol(argv[1], NULL, 10);
                 uart_send_int((int)size);
@@ -183,6 +186,30 @@ void shell()
                 {
                     // 調用 cmd_setTimeout 函數處理命令
                     cmd_setTimeout(argc, argv);
+                }
+            }
+            else if (strcmp(argv[0], "mem_alloc") == 0)
+            {
+                size_t size = strtol(argv[1], NULL, 10);
+                void * ptr=buddy_malloc(size);
+                uart_send_string("[main] Memory allocated at address: ");
+                uart_send_hex((uint32_t)ptr);
+                uart_send_string("\r\n");
+                //break; // Exit the shell loop
+            }
+            else if (strcmp(argv[0], "free") == 0)
+            {
+                if (argc != 2)
+                {
+                    uart_send_string("Usage: free <address>\r\n");
+                }
+                else
+                {
+                    void *addr = (void *)strtol(argv[1], NULL, 16);
+                    buddy_free(addr);
+                    uart_send_string("[main] Memory freed at address: ");
+                    uart_send_hex((uint32_t)addr);
+                    uart_send_string("\r\n");
                 }
             }
             else
@@ -233,14 +260,17 @@ void kernel_main(void *dtb_addr)
     {
         uart_send_string("Failed to initialize DTB parser\r\n");
     }
-    uart_send_string("[main] get_initramfs \r\n");
+    //uart_send_string("[main] get_initramfs \r\n");
     // 獲取 initramfs 地址和大小
     get_initramfs_info(dtb_addr);
-    uart_send_string("[main] Finish DTB\r\n");
+    //uart_send_string("[main] Finish DTB\r\n");
+    //interrupt task init
     task_queue_init(&global_task_queue);
-    uart_send_string("[main] start shell\r\n");
+    //enable_interrupts;
     uart_enable_interrupt();
     enable_interrupts();
+    buddy_init();
+    uart_send_string("[main] start shell\r\n");
     shell();
     uart_send_string("[main] shell error\r\n");
     while (1)

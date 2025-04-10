@@ -7,8 +7,8 @@ void uart_send_string(const char *str);
 void uart_send(char c);
 char uart_recv();
 
-#define USER_PROGRAM_BASE 0x10000000
-#define USER_STACK_POINTER_BASE 0x20000000
+#define USER_PROGRAM_BASE 0x20000000
+#define USER_STACK_POINTER_BASE 0x21000000
 
 struct file_information
 {
