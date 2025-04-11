@@ -10,9 +10,9 @@ static size_t heap_index = 0;
 
 void *simple_alloc(size_t size)
 {
-    if (size % 8 != 0)
+    if (size % 16 != 0)
     {
-        size += 8 - (size % 8);
+        size += 16 - (size % 16);
     }
     heap_size = &__heap_end - &__heap_start;
     if (heap_index + size > heap_size)

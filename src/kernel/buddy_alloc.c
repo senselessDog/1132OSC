@@ -25,20 +25,24 @@ void buddy_init(void) {
     uint32_t total_pages = memory_size / PAGE_SIZE;
     
     // Allocate space for buddy system metadata
-    buddy_system = (buddy_system_t*)BUDDY_METADATA_ADDR;
+    buddy_system = (buddy_system_t*)simple_alloc(sizeof(buddy_system_t));
     
     // Initialize buddy system fields
     buddy_system->memory_start = (void*)BUDDY_MEMORY_START;
     buddy_system->total_pages = total_pages;
     
     // Calculate starting point for buddy lists
-    buddy_block_list_t* lists_start = (buddy_block_list_t*)simple_alloc(sizeof(buddy_block_list_t) * MAX_ORDER);
     buddy_system->buddy_list = (buddy_block_list_t**)simple_alloc(sizeof(buddy_block_list_t*) * MAX_ORDER);
     uint32_t offset = 0;
     // Initialize lists for each order
     for (int order = 0; order < MAX_ORDER; order++) {
         // Initialize blocks for this order
         int num_blocks = total_pages / (1 << order);
+        uart_send_string("\r\nBuddy system order ");
+        uart_send_int(order);
+        uart_send_string(": ");
+        uart_send_int(num_blocks);
+        uart_send_string(" blocks\r\n");
         buddy_system->list_addr[order] = (void*)simple_alloc(sizeof(buddy_block_list_t) *num_blocks);
         buddy_system->buddy_list[order] = buddy_system->list_addr[order];
         
@@ -60,7 +64,10 @@ void buddy_init(void) {
                 buddy_system->first_avail[order] = -1;  // No blocks available yet
             }
         }
+        uart_send_string("Buddy system simple_allocated to ");
+        uart_send_hex((uint32_t)buddy_system->list_addr[order]);
     }
+    
     
     uart_send_string("\r\nBuddy system initialized with ");
     uart_send_int(total_pages);
@@ -72,7 +79,7 @@ void buddy_init(void) {
     uart_send_hex(BUDDY_MEMORY_END);
     uart_send_string("\r\n");
     //reserve memory
-    //reserve_system_memory();
+    reserve_system_memory();
 }
 
 // Split a block of a given order into two blocks of the next lower order
@@ -180,9 +187,9 @@ void mark_allocated(int order, int start_idx) {
 
 // Allocate memory from the buddy system
 void* buddy_malloc(size_t size) {
-    if (buddy_system == NULL) {
-        buddy_init();
-    }
+    // if (buddy_system == NULL) {
+    //     buddy_init();
+    // }
     
     if (size == 0) {
         return NULL;
@@ -264,22 +271,6 @@ void* buddy_malloc(size_t size) {
     
     
     return addr;
-}
-
-// Find the order of a block given its address
-int find_block_order(void* addr) {
-    uint32_t offset = (uint32_t)addr - (uint32_t)buddy_system->memory_start;
-    uint32_t page_idx = offset / PAGE_SIZE;
-    
-    // Start from the smallest order
-    for (int order = 0; order < MAX_ORDER; order++) {
-        int block_idx = page_idx / (1 << order);
-        if (buddy_system->buddy_list[order][block_idx].val == BLOCK_ALLOCATED) {
-            return order;
-        }
-    }
-    
-    return -1;  // Block not found
 }
 
 // Free a previously allocated memory block
@@ -434,7 +425,7 @@ void init_dynamic_allocator() {
     }
     
     // Initialize the pool page tracking array
-    for (int i = 0; i < (1 << (MAX_ORDER - 1)); i++) {
+    for (int i = 0; i < (1 << (MAX_INDEX_EXPONENT - 1)); i++) {
         pool_page_addr[i] = -1;  // -1 indicates not part of any pool
     }
 }
@@ -526,7 +517,7 @@ void dynamic_free(void* ptr) {
     int page_index = (addr - BUDDY_MEMORY_START) / PAGE_SIZE;
     
     // Check if this address is from a pool or directly from buddy
-    if (page_index >= 0 && page_index < (1 << (MAX_ORDER - 1)) && pool_page_addr[page_index] != -1) {
+    if (page_index >= 0 && page_index < (1 << (POOL_SIZES[NUM_POOLS-1] - 1)) && pool_page_addr[page_index] != -1) {
         // This is a small allocation from a pool
         int pool_index = pool_page_addr[page_index];
         
@@ -556,17 +547,16 @@ void dynamic_free(void* ptr) {
 void memory_reserve(uint32_t start, uint32_t end) {
     // 計算起始和結束的區塊索引
     uint32_t start_idx = (start - (uint32_t)buddy_system->memory_start) / PAGE_SIZE;
-    uint32_t end_idx = (end - (uint32_t)buddy_system->memory_start) / PAGE_SIZE;
-
+    uint32_t end_idx = (end - (uint32_t)buddy_system->memory_start-1) / PAGE_SIZE;
     // 檢查是否為無效請求
     if (end_idx < start_idx) {
         uart_send_string("Invalid memory reserve request\r\n");
         return;
     }
-    uart_send_string("Reserving memory from 0x");
-    uart_send_hex(start);
-    uart_send_string(" to 0x");
-    uart_send_hex(end);
+    uart_send_string("Reserving memory from idx= ");
+    uart_send_hex(start_idx);
+    uart_send_string(" to idx= ");
+    uart_send_hex(end_idx);
     uart_send_string("\r\n");
 
     // 從最底層頁面開始處理
@@ -627,12 +617,23 @@ void reserve_system_memory(void) {
     // Now reserve all regions
     // Reserve spin tables
     memory_reserve((uint32_t)0x0000, (uint32_t)0x1000);
-    
     // Reserve kernel image
-    memory_reserve((uint32_t)_kernel_start, (uint32_t)_kernel_end);
+    uint32_t kernel_end_addr = (uint32_t)&_kernel_end;
+
+    uart_send_string("[reserve_memory] Kernel start: 0x");
+    uart_send_hex(_kernel_start);
+    uart_send_string(" - 0x");
+    uart_send_hex(kernel_end_addr); 
+    uart_send_string("\r\n");
+    memory_reserve((uint32_t)_kernel_start, (uint32_t)kernel_end_addr);
     
     // Reserve initramfs
-    memory_reserve((uint32_t)g_initramfs_addr, (uint32_t)(g_initramfs_addr + g_initramfs_size));
+    uart_send_string("[reserve_memory] Initramfs start: 0x");
+    uart_send_hex((uint32_t)g_initramfs_addr);
+    uart_send_string(" - 0x");
+    uart_send_hex((uint32_t)(g_initramfs_end_addr)); 
+    uart_send_string("\r\n");
+    memory_reserve((uint32_t)g_initramfs_addr, (uint32_t)g_initramfs_end_addr);
     if (g_fdt_addr) {
         struct fdt_header *header = (struct fdt_header *)g_fdt_addr;
         uint32_t dtb_size = (uint32_t)fdt32_to_cpu(header->totalsize);

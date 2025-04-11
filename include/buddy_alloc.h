@@ -4,16 +4,17 @@
 
 // Constants
 #define PAGE_SIZE 4096  // 4KB page size
-#define MAX_ORDER 14    // Maximum order for the buddy system (2^10 * 4KB = 4MB max allocation)
-#define BUDDY_METADATA_ADDR 0x11000000  // Start address for metadata
-#define BUDDY_MEMORY_START 0x12000000   // Start address for allocatable memory
-#define BUDDY_MEMORY_END 0x180000000     // End address for allocatable memory
+#define MAX_ORDER 13    //range from order=0~12
+#define BUDDY_METADATA_ADDR 0x00 // Start address for metadata
+#define BUDDY_MEMORY_START 0x00   // Start address for allocatable memory
+#define BUDDY_MEMORY_END 0x3C000000     // End address for allocatable memory
 // Status values for blocks
 #define BLOCK_SPLIT -3      // Block is split into smaller blocks
 #define BLOCK_BELONGS -2    // Block belongs to a larger block
 #define BLOCK_ALLOCATED -1  // Block is allocated
 
 void * _kernel_start=0x80000;
+// void * kernel_end=0x100000;
 extern char _kernel_end;
 
 // Data structures
@@ -57,9 +58,9 @@ typedef struct block_header {
 
 // Array of free lists, one for each pool size
 block_header_t* free_lists[NUM_POOLS];
-
+#define MAX_INDEX_EXPONENT 19
 // To track which pool a page belongs to (-1 if page is directly from buddy allocator)
-int pool_page_addr[(1 << (19 - 1))];
+int pool_page_addr[(1 << (MAX_INDEX_EXPONENT - 1))];
 
 // Count of free blocks in each pool
 int free_list_counts[NUM_POOLS];

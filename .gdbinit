@@ -1,8 +1,8 @@
 define kernel
   file kernel8.elf
   target remote :1234
-  b buddy_alloc.c:311
-  b buddy_alloc.c:339
+  b buddy_alloc.c:640
+  b buddy_alloc.c:653
 end
 
 define user

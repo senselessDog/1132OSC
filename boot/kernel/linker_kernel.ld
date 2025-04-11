@@ -28,7 +28,7 @@ SECTIONS
     . = ALIGN(16);
     .heap (NOLOAD) : {
         __heap_start = .;
-        . += 0x1000000;
+        . += 0x1200000;
         __heap_end = .;
     }
 

@@ -6,8 +6,9 @@ void uart_send_hex(uint32_t value);
 // 保存 DTB 的地址
 void *g_fdt_addr = NULL;
 
-uint64_t g_initramfs_addr;
-uint64_t g_initramfs_size;
+uint32_t g_initramfs_addr;
+uint32_t g_initramfs_size;
+uint32_t g_initramfs_end_addr;
 
 // 初始化 FDT 解析器
 int fdt_init(void *fdt_addr)
@@ -164,15 +165,17 @@ int initramfs_callback(const char *path, const char *name, const void *data, uin
         uart_send_hex(addr); // 將整數轉換為十六進制並打印
         uart_send_string("\r\n");
         uart_send_string("[callback] Found initramfs at address: \r\n");
-        g_initramfs_addr = (uint64_t)addr;
+        g_initramfs_addr = (uint32_t)addr;
         uart_send_hex((uint32_t)g_initramfs_addr);
         uart_send_string("\r\n");
         info->found = 1;
     }
     else if (strcmp(name, "linux,initrd-end") == 0)
     {
-        uint32_t end_addr = fdt32_to_cpu((uint32_t)data);
-        g_initramfs_size = (uint64_t)(end_addr - g_initramfs_addr);
+        g_initramfs_end_addr = fdt32_to_cpu(*(uint32_t *)data);
+        uart_send_string("[callback] Found initramfs end address: 0x");
+        uart_send_hex(g_initramfs_end_addr);
+        uart_send_string("\r\n");
     }
 
     return 0; // 繼續遍歷
@@ -184,6 +187,11 @@ int get_initramfs_info(void *dtb_addr)
     struct initramfs_info info = {0};
     if (fdt_traverse(initramfs_callback, &info) == 0 && info.found)
     {
+        //calculate size
+        uart_send_string("[callback] Found initramfs end address: 0x");
+        uart_send_hex(g_initramfs_end_addr);
+        uart_send_string("\r\n");
+        g_initramfs_size = (uint32_t)(g_initramfs_end_addr - g_initramfs_addr);
         uart_send_string("[get_initramfs_info] Found initramfs at address: 0x");
         uart_send_hex((uint32_t)g_initramfs_addr);
         uart_send_string(" with size: 0x");
