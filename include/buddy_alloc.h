@@ -39,9 +39,12 @@ void buddy_split(int order, int start_idx, int requested_order);
 void mark_allocated(int order, int start_idx);
 //int find_block_order(void* addr);
 //dynamic memory allocation
+void init_dynamic_allocator(void);
+void* dynamic_malloc(size_t size);
+void dynamic_free(void* ptr);
 // Define the number of pools and their sizes
-#define NUM_POOLS 7
-const size_t POOL_SIZES[NUM_POOLS] = {16, 32, 64, 128, 512, 1024, 2048};  // Note: You had 196 but I think you meant 96
+#define NUM_POOLS 8
+const size_t POOL_SIZES[NUM_POOLS] = {16, 32, 64, 128,256, 512, 1024, 2048};  // Note: You had 196 but I think you meant 96
 
 // For tracking free blocks in each pool
 typedef struct block_header {
@@ -57,3 +60,6 @@ int pool_page_addr[(1 << (19 - 1))];
 
 // Count of free blocks in each pool
 int free_list_counts[NUM_POOLS];
+//memory_reserve
+void memory_reserve(uint32_t start, uint32_t end);
+void memory_reserve_list(void);

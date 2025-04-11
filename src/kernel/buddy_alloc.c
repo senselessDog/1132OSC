@@ -128,15 +128,16 @@ void buddy_split(int order, int start_idx, int requested_order) {
     // Add right child to the free list
     buddy_block_list_t* last = &buddy_system->buddy_list[child_order][left_child_idx];
     last->next = &buddy_system->buddy_list[child_order][right_child_idx];
-    
-    // Continue splitting if needed
-    if (child_order > requested_order) {
-        buddy_split(child_order, left_child_idx, requested_order);
-    }
+    return;
 }
 
 // Mark a block as allocated and remove it from the free list
 void mark_allocated(int order, int start_idx) {
+    if (buddy_system->buddy_list[order][start_idx].val== BLOCK_ALLOCATED){
+        // Block is already allocated, no need to mark again
+        uart_send_string("\r\nBlock already split, skipping\r\n");
+        return;
+    }
     //printf("Marking block as allocated: order=%d, index=%d\n", order, start_idx);
     uart_send_string("\r\nMarking block as allocated: order=");
     uart_send_int(order);
@@ -221,8 +222,13 @@ void* buddy_malloc(size_t size) {
     
     // If the block is larger than needed, split it
     if (order > requested_order) {
-        buddy_split(order, block_idx, requested_order);
-        
+        for (int i = order; i > requested_order; i--) {
+            // Split the block into two smaller blocks
+            buddy_split(i, block_idx, requested_order);
+            
+            // Update the block index to point to the left child
+            block_idx = block_idx * 2;
+        }
         // After splitting, use the smallest block that fits the request
         block_idx = buddy_system->first_avail[requested_order];
         order = requested_order;
@@ -542,4 +548,76 @@ void dynamic_free(void* ptr) {
         uart_send_hex((uint32_t)ptr);
         uart_send_string(" back to buddy system\r\n");
     }
+}
+
+void memory_reserve(uint32_t start, uint32_t end) {
+    // 計算起始和結束的區塊索引
+    uint32_t start_idx = (start - (uint32_t)buddy_system->memory_start) / PAGE_SIZE;
+    uint32_t end_idx = (end - (uint32_t)buddy_system->memory_start) / PAGE_SIZE;
+
+    // 檢查是否為無效請求
+    if (end_idx < start_idx) {
+        uart_send_string("Invalid memory reserve request\r\n");
+        return;
+    }
+    uart_send_string("Reserving memory from 0x");
+    uart_send_hex(start);
+    uart_send_string(" to 0x");
+    uart_send_hex(end);
+    uart_send_string("\r\n");
+
+    // 從最底層頁面開始處理
+    for (uint32_t i = start_idx; i <= end_idx; i++) {
+        int target_order = 0;
+        int target_idx = i;
+        
+        // 檢查是否已經被分配
+        if (buddy_system->buddy_list[target_order][target_idx].val == BLOCK_ALLOCATED) {
+            // 已經被分配，跳過
+            continue;
+        }
+        
+        // 從最底層開始，向上找到可以開始分割的最高層
+        int split_order = MAX_ORDER - 1;
+        int split_idx = target_idx / (1 << split_order);
+        
+        // 從最高層開始，往下檢查每一層
+        while (split_order > 0) {
+            // 檢查當前層級的區塊狀態
+            int block_val = buddy_system->buddy_list[split_order][split_idx].val;
+            
+            if (block_val == BLOCK_SPLIT) {
+                // 已經被分割，找下一層
+                split_order--;
+                split_idx = target_idx / (1 << split_order);
+            } else {
+                break;
+            }
+        }
+        
+        // 如果找到了可以分割的區塊
+        if (split_order > 0) {
+            // 從該層開始分割
+            for (int j = split_order; j > target_order; j--) {
+                // 計算當前區塊的索引
+                int current_idx = target_idx / (1 << j);
+                
+                // 分割該區塊
+                buddy_split(j, current_idx, target_order);
+                
+                // 更新索引
+            }
+
+        }
+        uart_send_string("Memory reservation split completed\r\n");
+        // 無論是否需要分割，最後都標記目標頁面為已分配
+        if (buddy_system->buddy_list[target_order][target_idx].val == target_order) {
+            mark_allocated(target_order, target_idx);
+        }
+    }
+    uart_send_string("Memory reservation completed\r\n");
+}
+
+void memory_reserve_list(void){
+    memory_reserve(0x0000 , 0x1000);
 }
