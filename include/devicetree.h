@@ -18,7 +18,9 @@ struct fdt_header
     uint32_t size_dt_strings;   // 字符串塊大小
     uint32_t size_dt_struct;    // 結構塊大小
 };
-
+extern void *g_fdt_addr;
+extern uint64_t g_initramfs_addr;
+extern uint64_t g_initramfs_size;
 // FDT 結構塊中的標記類型
 #define FDT_BEGIN_NODE 0x1 // 開始節點
 #define FDT_END_NODE 0x2   // 結束節點

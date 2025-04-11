@@ -13,6 +13,9 @@
 #define BLOCK_BELONGS -2    // Block belongs to a larger block
 #define BLOCK_ALLOCATED -1  // Block is allocated
 
+void * _kernel_start=0x80000;
+extern char _kernel_end;
+
 // Data structures
 typedef struct buddy_block_list {
     int val;  // Status or order value
@@ -62,4 +65,4 @@ int pool_page_addr[(1 << (19 - 1))];
 int free_list_counts[NUM_POOLS];
 //memory_reserve
 void memory_reserve(uint32_t start, uint32_t end);
-void memory_reserve_list(void);
+void reserve_system_memory(void);

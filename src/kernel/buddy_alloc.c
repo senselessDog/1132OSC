@@ -1,5 +1,6 @@
 #include "buddy_alloc.h"
 #include "uart.h"
+#include "devicetree.h"
 // Calculate the required order for a given size
 int size_to_order(size_t size) {
     int pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;  // Ceiling division
@@ -31,16 +32,16 @@ void buddy_init(void) {
     buddy_system->total_pages = total_pages;
     
     // Calculate starting point for buddy lists
-    buddy_block_list_t* lists_start = (buddy_block_list_t*)(BUDDY_METADATA_ADDR + sizeof(buddy_system_t));
-    buddy_system->buddy_list = (buddy_block_list_t**)((uint32_t)lists_start + sizeof(buddy_block_list_t*) * MAX_ORDER);
+    buddy_block_list_t* lists_start = (buddy_block_list_t*)simple_alloc(sizeof(buddy_block_list_t) * MAX_ORDER);
+    buddy_system->buddy_list = (buddy_block_list_t**)simple_alloc(sizeof(buddy_block_list_t*) * MAX_ORDER);
     uint32_t offset = 0;
     // Initialize lists for each order
     for (int order = 0; order < MAX_ORDER; order++) {
-        buddy_system->list_addr[order] = (void*)((uint32_t)buddy_system->buddy_list + sizeof(buddy_block_list_t*) * MAX_ORDER + offset);
-        buddy_system->buddy_list[order] = buddy_system->list_addr[order];
-        
         // Initialize blocks for this order
         int num_blocks = total_pages / (1 << order);
+        buddy_system->list_addr[order] = (void*)simple_alloc(sizeof(buddy_block_list_t) *num_blocks);
+        buddy_system->buddy_list[order] = buddy_system->list_addr[order];
+        
         // 更新下一個order的偏移量
         offset += sizeof(buddy_block_list_t) * num_blocks;
 
@@ -70,6 +71,8 @@ void buddy_init(void) {
     uart_send_string(" - 0x");
     uart_send_hex(BUDDY_MEMORY_END);
     uart_send_string("\r\n");
+    //reserve memory
+    //reserve_system_memory();
 }
 
 // Split a block of a given order into two blocks of the next lower order
@@ -618,6 +621,36 @@ void memory_reserve(uint32_t start, uint32_t end) {
     uart_send_string("Memory reservation completed\r\n");
 }
 
-void memory_reserve_list(void){
-    memory_reserve(0x0000 , 0x1000);
+// Function to reserve all required memory regions
+void reserve_system_memory(void) {
+    
+    // Now reserve all regions
+    // Reserve spin tables
+    memory_reserve((uint32_t)0x0000, (uint32_t)0x1000);
+    
+    // Reserve kernel image
+    memory_reserve((uint32_t)_kernel_start, (uint32_t)_kernel_end);
+    
+    // Reserve initramfs
+    memory_reserve((uint32_t)g_initramfs_addr, (uint32_t)(g_initramfs_addr + g_initramfs_size));
+    if (g_fdt_addr) {
+        struct fdt_header *header = (struct fdt_header *)g_fdt_addr;
+        uint32_t dtb_size = (uint32_t)fdt32_to_cpu(header->totalsize);
+        // Reserve devicetree
+        memory_reserve((uint32_t)g_fdt_addr, (uint32_t)(g_fdt_addr + dtb_size));
+        uart_send_string("[reserve_memory] Reserved devicetree: 0x");
+        uart_send_hex((uint32_t)g_fdt_addr);
+        uart_send_string(" - 0x");
+        uart_send_hex((uint32_t)(g_fdt_addr + dtb_size));
+        uart_send_string("\r\n");
+    }
+    
+    
+    // Reserve simple allocator - you'll need to define where it is located
+    // This depends on your implementation
+    // uint64_t startup_allocator_start = /* define this */;
+    // uint64_t startup_allocator_size = /* define this */;
+    // memory_reserve(startup_allocator_start, startup_allocator_start + startup_allocator_size);
+    
+    uart_send_string("[reserve_system_memory] Memory regions reserved successfully\r\n");
 }

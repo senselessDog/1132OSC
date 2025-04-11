@@ -28,10 +28,11 @@ SECTIONS
     . = ALIGN(16);
     .heap (NOLOAD) : {
         __heap_start = .;
-        . += 0x10000; /* 1 MB heap size */
+        . += 0x1000000;
         __heap_end = .;
     }
 
     . = ALIGN(16);
     _stack_top = . + 0x10000;
+    _kernel_end = .+0x10000;       /* define kernel end location*/
 }

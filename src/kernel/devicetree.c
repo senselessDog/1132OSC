@@ -4,7 +4,7 @@
 void uart_send_string(const char *str);
 void uart_send_hex(uint32_t value);
 // 保存 DTB 的地址
-static void *g_fdt_addr = NULL;
+void *g_fdt_addr = NULL;
 
 uint64_t g_initramfs_addr;
 uint64_t g_initramfs_size;
