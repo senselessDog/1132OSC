@@ -553,7 +553,7 @@ void memory_reserve(uint32_t start, uint32_t end) {
         uart_send_string("Invalid memory reserve request\r\n");
         return;
     }
-    uart_send_string("Reserving memory from idx= ");
+    uart_send_string("[memory_reserve]Reserving memory from idx= ");
     uart_send_hex(start_idx);
     uart_send_string(" to idx= ");
     uart_send_hex(end_idx);
@@ -602,7 +602,7 @@ void memory_reserve(uint32_t start, uint32_t end) {
             }
 
         }
-        uart_send_string("Memory reservation split completed\r\n");
+        //uart_send_string("Memory reservation split completed\r\n");
         // 無論是否需要分割，最後都標記目標頁面為已分配
         if (buddy_system->buddy_list[target_order][target_idx].val == target_order) {
             mark_allocated(target_order, target_idx);
@@ -620,20 +620,20 @@ void reserve_system_memory(void) {
     // Reserve kernel image
     uint32_t kernel_end_addr = (uint32_t)&_kernel_end;
 
+    memory_reserve((uint32_t)_kernel_start, (uint32_t)kernel_end_addr);
     uart_send_string("[reserve_memory] Kernel start: 0x");
     uart_send_hex(_kernel_start);
     uart_send_string(" - 0x");
     uart_send_hex(kernel_end_addr); 
     uart_send_string("\r\n");
-    memory_reserve((uint32_t)_kernel_start, (uint32_t)kernel_end_addr);
     
     // Reserve initramfs
-    uart_send_string("[reserve_memory] Initramfs start: 0x");
-    uart_send_hex((uint32_t)g_initramfs_addr);
-    uart_send_string(" - 0x");
-    uart_send_hex((uint32_t)(g_initramfs_end_addr)); 
-    uart_send_string("\r\n");
-    memory_reserve((uint32_t)g_initramfs_addr, (uint32_t)g_initramfs_end_addr);
+    // memory_reserve((uint32_t)g_initramfs_addr, (uint32_t)g_initramfs_end_addr);
+    // uart_send_string("[reserve_memory] Initramfs start: 0x");
+    // uart_send_hex((uint32_t)g_initramfs_addr);
+    // uart_send_string(" - 0x");
+    // uart_send_hex((uint32_t)(g_initramfs_end_addr)); 
+    // uart_send_string("\r\n");
     if (g_fdt_addr) {
         struct fdt_header *header = (struct fdt_header *)g_fdt_addr;
         uint32_t dtb_size = (uint32_t)fdt32_to_cpu(header->totalsize);
