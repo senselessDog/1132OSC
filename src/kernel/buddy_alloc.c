@@ -56,11 +56,13 @@ void buddy_init(void) {
             if (order == MAX_ORDER - 1) {
                 block->val = order;  // Mark as free with this order
                 block->next = (i < num_blocks - 1) ? &buddy_system->buddy_list[order][i + 1] : NULL;
+                block->prev = (i > 0) ? &buddy_system->buddy_list[order][i - 1] : NULL;
                 buddy_system->first_avail[order] = 0;  // First block is available
             } else {
                 // For lower orders, mark as belonging to higher orders
                 block->val = BLOCK_BELONGS;
                 block->next = NULL;
+                block->prev = NULL;
                 buddy_system->first_avail[order] = -1;  // No blocks available yet
             }
         }
@@ -98,14 +100,20 @@ void buddy_split(int order, int start_idx, int requested_order) {
         buddy_system->first_avail[order] = (buddy_system->buddy_list[order][start_idx].next != NULL) ? 
             // 使用安全的指針運算方式
             (buddy_system->buddy_list[order][start_idx].next -buddy_system->buddy_list[order]) : -1;
+        if (buddy_system->buddy_list[order][start_idx].next != NULL) {
+        buddy_system->buddy_list[order][start_idx].next->prev = NULL;
+        }
     } else {
         // Otherwise, find the block in the list and remove it
-        buddy_block_list_t* prev = &buddy_system->buddy_list[order][buddy_system->first_avail[order]];
-        while (prev->next != &buddy_system->buddy_list[order][start_idx]) {
-            prev = prev->next;
-        }
+        buddy_block_list_t* prev = buddy_system->buddy_list[order][start_idx].prev;
+        buddy_block_list_t* next = buddy_system->buddy_list[order][start_idx].next;
         prev->next = buddy_system->buddy_list[order][start_idx].next;
+        if (next != NULL) {
+            next->prev = buddy_system->buddy_list[order][start_idx].prev;
+        }
     }
+    buddy_system->buddy_list[order][start_idx].next = NULL;
+    buddy_system->buddy_list[order][start_idx].prev = NULL;
 
     // Mark the current block as split
     buddy_system->buddy_list[order][start_idx].val = BLOCK_SPLIT;
@@ -118,25 +126,30 @@ void buddy_split(int order, int start_idx, int requested_order) {
     // Mark left child as free
     buddy_system->buddy_list[child_order][left_child_idx].val = child_order;
     buddy_system->buddy_list[child_order][left_child_idx].next = NULL;
+    buddy_system->buddy_list[child_order][left_child_idx].prev = NULL;
+
+    // Mark right child as free
+    buddy_system->buddy_list[child_order][right_child_idx].val = child_order;
+    buddy_system->buddy_list[child_order][right_child_idx].next = NULL;
+    buddy_system->buddy_list[child_order][right_child_idx].prev = NULL;
     
     // Update the free list for the child order
     if (buddy_system->first_avail[child_order] == -1) { //no free blocks in this order
         buddy_system->first_avail[child_order] = left_child_idx;
     } else {
         // Find the last element in the list
-        buddy_block_list_t* current = &buddy_system->buddy_list[child_order][buddy_system->first_avail[child_order]];
-        while (current->next != NULL) {
-            current = current->next;
-        }
-        current->next = &buddy_system->buddy_list[child_order][left_child_idx];
+        buddy_block_list_t* head = &buddy_system->buddy_list[child_order][buddy_system->first_avail[child_order]];
+        buddy_system->buddy_list[child_order][left_child_idx].next = head;
+        head->prev = &buddy_system->buddy_list[child_order][left_child_idx];
+        buddy_system->first_avail[child_order] = left_child_idx;
     }
     
-    // Mark right child as free
-    buddy_system->buddy_list[child_order][right_child_idx].val = child_order;
-    buddy_system->buddy_list[child_order][right_child_idx].next = NULL;
     
     // Add right child to the free list
     buddy_block_list_t* last = &buddy_system->buddy_list[child_order][left_child_idx];
+    buddy_system->buddy_list[child_order][right_child_idx].next = last->next;
+    buddy_system->buddy_list[child_order][right_child_idx].prev = last;
+    last->next->prev = &buddy_system->buddy_list[child_order][right_child_idx];
     last->next = &buddy_system->buddy_list[child_order][right_child_idx];
     return;
 }
@@ -163,6 +176,9 @@ void mark_allocated(int order, int start_idx) {
         // If this was the first available block, update to the next one
         buddy_system->first_avail[order] = (buddy_system->buddy_list[order][start_idx].next != NULL) ? 
             ((int)(buddy_system->buddy_list[order][start_idx].next - buddy_system->buddy_list[order])) : -1;
+        if (buddy_system->buddy_list[order][start_idx].next != NULL) {
+            buddy_system->buddy_list[order][start_idx].next->prev = NULL;
+        }
         // uart_send_string("In allocated Now next and add= \r\n");
         // uart_send_hex((buddy_system->buddy_list[order][start_idx].next));
         // uart_send_string("\r\n");
@@ -174,15 +190,17 @@ void mark_allocated(int order, int start_idx) {
         // uart_send_string("\r\n");
     } else {
         // Otherwise, find the block in the list and remove it
-        buddy_block_list_t* prev = &buddy_system->buddy_list[order][buddy_system->first_avail[order]];
-        while (prev->next != &buddy_system->buddy_list[order][start_idx]) {
-            prev = prev->next;
-        }
+        buddy_block_list_t* prev = &buddy_system->buddy_list[order][start_idx].prev;
+        buddy_block_list_t* next = &buddy_system->buddy_list[order][start_idx].next;
         prev->next = buddy_system->buddy_list[order][start_idx].next;
+        if (next != NULL) {
+            next->prev = buddy_system->buddy_list[order][start_idx].prev;
+        }
     }
     
     // Clear the next pointer
     buddy_system->buddy_list[order][start_idx].next = NULL;
+    buddy_system->buddy_list[order][start_idx].prev = NULL;
 }
 
 // Allocate memory from the buddy system
@@ -201,6 +219,7 @@ void* buddy_malloc(size_t size) {
     // Check if the requested size is too large
     if (requested_order >= MAX_ORDER) {
         uart_send_string("Requested size too large!");
+        uart_send_string("\r\n");
         return NULL;
     }
     //"Allocating %zu bytes (order %d)\n", size, requested_order
@@ -334,8 +353,10 @@ void buddy_free(void* addr) {
     if (buddy_system->first_avail[order] == -1) {
         buddy_system->first_avail[order] = block_idx;
         buddy_system->buddy_list[order][block_idx].next = NULL;
+        buddy_system->buddy_list[order][block_idx].prev = NULL;
     } else {
         buddy_system->buddy_list[order][block_idx].next = &buddy_system->buddy_list[order][buddy_system->first_avail[order]];
+        buddy_system->buddy_list[order][buddy_system->first_avail[order]].prev = &buddy_system->buddy_list[order][block_idx];
         buddy_system->first_avail[order] = block_idx;
     }
     
@@ -362,18 +383,22 @@ void buddy_free(void* addr) {
         if (buddy_system->first_avail[order] == block_idx) {
             buddy_system->first_avail[order] = (buddy_system->buddy_list[order][block_idx].next != NULL) ? 
                 (buddy_system->buddy_list[order][block_idx].next - buddy_system->buddy_list[order]) : -1;
-                
+            
+            if (buddy_system->buddy_list[order][block_idx].next != NULL) {
+                buddy_system->buddy_list[order][block_idx].next->prev = NULL;
+            }
                 // uart_send_hex((buddy_system->buddy_list[order][block_idx].next));
                 // uart_send_string("\r\n");
                 // uart_send_hex(buddy_system->buddy_list[order]);
                 // uart_send_string("\r\n");
         } else {
             // Find block in the list
-            buddy_block_list_t* prev = &buddy_system->buddy_list[order][buddy_system->first_avail[order]];
-            while (prev->next != &buddy_system->buddy_list[order][block_idx]) {
-                prev = prev->next;
-            }
+            buddy_block_list_t* prev = &buddy_system->buddy_list[order][block_idx].prev;
+            buddy_block_list_t* next = &buddy_system->buddy_list[order][block_idx].next;
             prev->next = buddy_system->buddy_list[order][block_idx].next;
+            if (next != NULL) {
+                next->prev = buddy_system->buddy_list[order][block_idx].prev;
+            }
         }
 
         // uart_send_string("Now first_avail[order]= ");
@@ -382,20 +407,27 @@ void buddy_free(void* addr) {
         if (buddy_system->first_avail[order] == buddy_idx) {
             buddy_system->first_avail[order] = (buddy_system->buddy_list[order][buddy_idx].next != NULL) ? 
                 (buddy_system->buddy_list[order][buddy_idx].next - buddy_system->buddy_list[order]) : -1;
+
+            if (buddy_system->buddy_list[order][buddy_idx].next != NULL) {
+                buddy_system->buddy_list[order][buddy_idx].next->prev = NULL;
+            }
         } else {
             // Find buddy in the list
-            buddy_block_list_t* prev = &buddy_system->buddy_list[order][buddy_system->first_avail[order]];
-            while (prev->next != &buddy_system->buddy_list[order][buddy_idx]) {
-                prev = prev->next;
-            }
+            buddy_block_list_t* prev = &buddy_system->buddy_list[order][buddy_idx].prev;
+            buddy_block_list_t* next = &buddy_system->buddy_list[order][buddy_idx].next;
             prev->next = buddy_system->buddy_list[order][buddy_idx].next;
+            if (next != NULL) {
+                next->prev = buddy_system->buddy_list[order][buddy_idx].prev;
+            }
         }
         //uart_send_string("Removed child buddy from free list\r\n");
         // Mark both blocks as belonging to a larger block
         buddy_system->buddy_list[order][block_idx].val = BLOCK_BELONGS;
         buddy_system->buddy_list[order][block_idx].next = NULL;
+        buddy_system->buddy_list[order][block_idx].prev = NULL;
         buddy_system->buddy_list[order][buddy_idx].val = BLOCK_BELONGS;
         buddy_system->buddy_list[order][buddy_idx].next = NULL;
+        buddy_system->buddy_list[order][buddy_idx].prev = NULL;
         
         // Move to the parent block
         order++;
@@ -408,8 +440,10 @@ void buddy_free(void* addr) {
         if (buddy_system->first_avail[order] == -1) {
             buddy_system->first_avail[order] = block_idx;
             buddy_system->buddy_list[order][block_idx].next = NULL;
+            buddy_system->buddy_list[order][block_idx].prev = NULL;
         } else {
             buddy_system->buddy_list[order][block_idx].next = &buddy_system->buddy_list[order][buddy_system->first_avail[order]];
+            buddy_system->buddy_list[order][buddy_system->first_avail[order]].prev = &buddy_system->buddy_list[order][block_idx];
             buddy_system->first_avail[order] = block_idx;
         }
     }

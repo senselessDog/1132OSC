@@ -20,6 +20,7 @@ extern char _kernel_end;
 // Data structures
 typedef struct buddy_block_list {
     int val;  // Status or order value
+    struct buddy_block_list* prev;  // Previous block in the free list
     struct buddy_block_list* next;  // Next block in the free list
 } buddy_block_list_t;
 
