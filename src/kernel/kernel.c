@@ -270,6 +270,7 @@ void kernel_main(void *dtb_addr)
     uart_enable_interrupt();
     enable_interrupts();
     buddy_init();
+    init_dynamic_allocator();
     uart_send_string("[main] start shell\r\n");
     shell();
     uart_send_string("[main] shell error\r\n");

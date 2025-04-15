@@ -549,9 +549,14 @@ void dynamic_free(void* ptr) {
     // Calculate which page this address belongs to
     uint32_t addr = (uint32_t)ptr;
     int page_index = (addr - BUDDY_MEMORY_START) / PAGE_SIZE;
-    
+    if (page_index < 0 && page_index >= (BUDDY_MEMORY_END/PAGE_SIZE)){
+        uart_send_string("Invalid address to free: 0x");
+        uart_send_hex(addr);
+        uart_send_string("\r\n");
+        return;
+    }
     // Check if this address is from a pool or directly from buddy
-    if (page_index >= 0 && page_index < (1 << (POOL_SIZES[NUM_POOLS-1] - 1)) && pool_page_addr[page_index] != -1) {
+    if (pool_page_addr[page_index] != -1) {
         // This is a small allocation from a pool
         int pool_index = pool_page_addr[page_index];
         

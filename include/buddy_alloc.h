@@ -13,7 +13,7 @@
 #define BLOCK_BELONGS -2    // Block belongs to a larger block
 #define BLOCK_ALLOCATED -1  // Block is allocated
 
-void * _kernel_start=0x80000;
+uint32_t _kernel_start=0x80000;
 // void * kernel_end=0x100000;
 extern char _kernel_end;
 
