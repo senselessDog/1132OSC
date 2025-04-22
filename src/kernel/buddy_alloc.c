@@ -667,12 +667,12 @@ void reserve_system_memory(void) {
     uart_send_string("\r\n");
     
     // Reserve initramfs
-    // memory_reserve((uint32_t)g_initramfs_addr, (uint32_t)g_initramfs_end_addr);
-    // uart_send_string("[reserve_memory] Initramfs start: 0x");
-    // uart_send_hex((uint32_t)g_initramfs_addr);
-    // uart_send_string(" - 0x");
-    // uart_send_hex((uint32_t)(g_initramfs_end_addr)); 
-    // uart_send_string("\r\n");
+    memory_reserve((uint32_t)g_initramfs_addr, (uint32_t)g_initramfs_end_addr);
+    uart_send_string("[reserve_memory] Initramfs start: 0x");
+    uart_send_hex((uint32_t)g_initramfs_addr);
+    uart_send_string(" - 0x");
+    uart_send_hex((uint32_t)(g_initramfs_end_addr)); 
+    uart_send_string("\r\n");
     if (g_fdt_addr) {
         struct fdt_header *header = (struct fdt_header *)g_fdt_addr;
         uint32_t dtb_size = (uint32_t)fdt32_to_cpu(header->totalsize);

@@ -76,7 +76,7 @@ show_qemu:
 gdb_init:
 	gdb-multiarch -x .gdbinit
 python:
-	/bin/python3 /home/kuan/lab/lab4/script/upload_kernel.py
+	/bin/python3 /home/kuan/lab/lab5/script/upload_kernel.py
 
 show_raspberryPi:
 	sudo minicom -D /dev/ttyUSB0 -b 115200
