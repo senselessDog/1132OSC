@@ -3,6 +3,7 @@
 #include "uart.h"
 #include "gpu_interrupt.h"
 #include "task_queue.h"
+#include "thread.h"
 void uart_init();
 void uart_send_string(const char *str);
 char uart_recv();
@@ -264,13 +265,26 @@ void kernel_main(void *dtb_addr)
     // 獲取 initramfs 地址和大小
     get_initramfs_info(dtb_addr);
     //uart_send_string("[main] Finish DTB\r\n");
+    
     //interrupt task init
     task_queue_init(&global_task_queue);
-    //enable_interrupts;
+    
+    // Enable interrupts
     uart_enable_interrupt();
     enable_interrupts();
+    
+    // Initialize memory allocator
     buddy_init();
     init_dynamic_allocator();
+    thread_init();
+    //create multiple threads
+    for(int i = 0; i < 3; i++) {
+        thread_create(thread_test);
+    }
+    
+    // Start idle thread
+    idle();
+    
     uart_send_string("[main] start shell\r\n");
     shell();
     uart_send_string("[main] shell error\r\n");

@@ -1,6 +1,15 @@
 #include "buddy_alloc.h"
 #include "uart.h"
 #include "devicetree.h"
+
+// Define the global variables
+uint32_t _kernel_start = 0x80000;
+buddy_system_t* buddy_system = NULL;
+const size_t POOL_SIZES[NUM_POOLS] = {16, 32, 64, 128, 256, 512, 1024, 2048};
+block_header_t* free_lists[NUM_POOLS];
+int pool_page_addr[(1 << (MAX_INDEX_EXPONENT - 1))];
+int free_list_counts[NUM_POOLS];
+
 // Calculate the required order for a given size
 int size_to_order(size_t size) {
     int pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;  // Ceiling division

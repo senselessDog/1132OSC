@@ -1,3 +1,5 @@
+#ifndef BUDDY_ALLOC_H
+#define BUDDY_ALLOC_H
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +15,7 @@
 #define BLOCK_BELONGS -2    // Block belongs to a larger block
 #define BLOCK_ALLOCATED -1  // Block is allocated
 
-uint32_t _kernel_start=0x80000;
+extern uint32_t _kernel_start;
 // void * kernel_end=0x100000;
 extern char _kernel_end;
 
@@ -33,7 +35,7 @@ typedef struct {
 } buddy_system_t;
 
 // Global buddy system instance
-buddy_system_t* buddy_system = NULL;
+extern buddy_system_t* buddy_system;
 
 // Function prototypes
 int size_to_order(size_t size);
@@ -49,7 +51,7 @@ void* dynamic_malloc(size_t size);
 void dynamic_free(void* ptr);
 // Define the number of pools and their sizes
 #define NUM_POOLS 8
-const size_t POOL_SIZES[NUM_POOLS] = {16, 32, 64, 128,256, 512, 1024, 2048};  // Note: You had 196 but I think you meant 96
+extern const size_t POOL_SIZES[NUM_POOLS];
 
 // For tracking free blocks in each pool
 typedef struct block_header {
@@ -58,13 +60,14 @@ typedef struct block_header {
 } block_header_t;
 
 // Array of free lists, one for each pool size
-block_header_t* free_lists[NUM_POOLS];
+extern block_header_t* free_lists[NUM_POOLS];
 #define MAX_INDEX_EXPONENT 19
 // To track which pool a page belongs to (-1 if page is directly from buddy allocator)
-int pool_page_addr[(1 << (MAX_INDEX_EXPONENT - 1))];
+extern int pool_page_addr[(1 << (MAX_INDEX_EXPONENT - 1))];
 
 // Count of free blocks in each pool
-int free_list_counts[NUM_POOLS];
+extern int free_list_counts[NUM_POOLS];
 //memory_reserve
 void memory_reserve(uint32_t start, uint32_t end);
 void reserve_system_memory(void);
+#endif // BUDDY_ALLOC_H
