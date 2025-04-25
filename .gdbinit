@@ -3,9 +3,10 @@ define kernel
   target remote :1234
   b thread_create
   # b idle
-  b thread_init
-  b thread_create_save
-  b schedule
+  # b thread_init
+  # b thread_create_save
+  # b schedule
+  b thread_exit
   # b buddy_alloc.c:640
   # b buddy_alloc.c:653
 end

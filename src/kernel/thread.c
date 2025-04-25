@@ -4,12 +4,56 @@
 #include <stddef.h>
 
 static thread_t *current_thread = NULL;
-static thread_t *thread_list = NULL;
+static thread_t *run_queue = NULL;
 static int next_thread_id = 1;
 
+static void add_to_run_queue(thread_t *thd) {
+    if (!run_queue) {
+        run_queue = thd;
+        thd->next = thd; // Point to itself for circularity
+    } else {
+        thd->next = run_queue->next;
+        run_queue->next = thd;
+        // Optional: keep run_queue pointing to the 'last' element for easier tail insertion
+        // run_queue = thd; // If run_queue points to last element
+    }
+    thd->state = THREAD_READY;
+}
+// Helper function to remove a thread from the run queue
+static void remove_from_run_queue(thread_t *thd) {
+    if (!run_queue || !thd) return;
+
+    thread_t *current = run_queue;
+    thread_t *prev = NULL;
+
+    // Find the thread and its predecessor
+    do {
+        if (current == thd) break;
+        prev = current;
+        current = current->next;
+    } while (current != run_queue);
+
+    // If thread not found or it's the only one
+    if (current != thd) return; // Not found
+
+    if (thd->next == thd) { // It's the only thread
+        run_queue = NULL;
+    } else {
+        if (prev) {
+            prev->next = thd->next;
+        }
+        // If removing the head node referenced by run_queue
+        if (run_queue == thd) {
+            // Find the new 'last' element if run_queue points to last, or just use prev->next if run_queue points to head
+             if (prev) run_queue = prev; // If run_queue points to last
+             else run_queue = thd->next; // If run_queue points to head and we remove it
+        }
+    }
+    //thd->next = NULL; // Clear the next pointer of the removed thread
+}
 void thread_init(void) {
     current_thread = NULL;
-    thread_list = NULL;
+    run_queue = NULL;
     next_thread_id = 1;
 
     // 創建一個特殊的 kernel 線程
@@ -25,7 +69,8 @@ void thread_init(void) {
     kernel_thread->sp = kernel_sp;
 
     current_thread = kernel_thread;
-    thread_list = kernel_thread;
+    add_to_run_queue(kernel_thread);
+    uart_send_string("Thread system initialized. Idle thread created.\r\n");
 }
 
 thread_t *thread_create(void (*entry_point)(void)) {
@@ -51,15 +96,7 @@ thread_t *thread_create(void (*entry_point)(void)) {
     
     
     // Add to thread list
-    if (!thread_list) {
-        thread_list = new_thread;
-    } else {
-        thread_t *current = thread_list;
-        while (current->next) {
-            current = current->next;
-        }
-        current->next = new_thread;
-    }
+    add_to_run_queue(new_thread);
     new_thread->sp = thread_sp-7*16;
     uart_send_string("new thread sp: ");
     uart_send_int(new_thread->sp);
@@ -72,14 +109,23 @@ thread_t *thread_create(void (*entry_point)(void)) {
 }
 
 void thread_exit(void) {
-    if (current_thread) {
-        current_thread->state = THREAD_DEAD;
-        schedule();
+    thread_t * delete_thread = get_current(); // Ensure current_thread is up-to-date
+    if (delete_thread) {
+        uart_send_string("Thread ID: ");
+        uart_send_int(delete_thread->id);
+        uart_send_string(" exiting.\r\n");
+        delete_thread->state = THREAD_DEAD;
+        remove_from_run_queue(delete_thread); // Remove from scheduling
+        schedule(); // Switch to another thread
+        // Should not return here
+        uart_send_string("Error: Exited thread returned!\r\n");
+        while(1);
     }
 }
 
+
 void schedule(void) {
-    if (!thread_list) {
+    if (!run_queue) {
         return;
     }
 
@@ -87,6 +133,9 @@ void schedule(void) {
     thread_t *next = current_thread->next;
     while (next) {
         if (next->state == THREAD_READY) {
+            break;
+        }
+        else if (next == current_thread && next->state == THREAD_RUNNING) {
             break;
         }
         next = next->next;
@@ -124,7 +173,7 @@ void schedule(void) {
 
     // Call assembly function to switch context
     extern void switch_to(uint64_t *prev_sp, uint64_t *current_sp, thread_t *current_thread);
-    switch_to(prev_thread_sp, current_thread->sp, current_thread);
+    switch_to(prev->sp, current_thread->sp, current_thread);
 }
 
 thread_t *get_current_thread(void) {
@@ -139,14 +188,15 @@ void idle(void) {
 }
 void kill_zombie_thread(void) {
     // Check for dead threads and clean them up
-    thread_t *current = thread_list;
-    thread_t *prev = NULL;
-    while (current) {
+    if (run_queue==NULL) return;
+    thread_t *current = run_queue->next;
+    thread_t *prev = run_queue;
+    while (current!=run_queue) {
         if (current->state == THREAD_DEAD) {
             if (prev) {
                 prev->next = current->next;
             } else {
-                thread_list = current->next;
+                run_queue = current->next;
             }
             thread_t *to_free = current;
             current = current->next;
@@ -164,6 +214,11 @@ void thread_test() {
         uart_send_int(current->id);
         uart_send_string(" ");
         uart_send_int(i);
+        uart_send_string("\r\n");
+        uint64_t thread_sp;
+        asm volatile("mov %0, sp" : "=r"(thread_sp));
+        uart_send_string("thread sp: ");
+        uart_send_int(thread_sp);
         uart_send_string("\r\n");
         
         // Simple delay
