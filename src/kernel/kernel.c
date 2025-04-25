@@ -23,8 +23,8 @@ void run_user(char *archive);
 void cmd_setTimeout(int argc, char **argv);
 void async_io_test();
 // 從 DTB 中獲取 initramfs 信息的全局變量
-extern uint64_t g_initramfs_addr;
-extern uint64_t g_initramfs_size;
+extern uint32_t g_initramfs_addr;
+extern uint32_t g_initramfs_size;
 // 從 DTB 中獲取 initramfs 信息的函數
 int get_initramfs_info(void *dtb_addr);
 /**
@@ -277,14 +277,19 @@ void kernel_main(void *dtb_addr)
     buddy_init();
     init_dynamic_allocator();
     thread_init();
-    //create multiple threads
-    for(int i = 0; i < 3; i++) {
-        thread_create(thread_test);
-    }
+    // create multiple threads
+    // for(int i = 0; i < 3; i++) {
+    //     thread_create(thread_test);
+    // }
     
-    // Start idle thread
-    idle();
-    
+    // // Start idle thread
+    // idle();
+    uart_send_hex((uint32_t)dtb_addr);
+    uart_send_string("\r\n");
+    uart_send_hex((uint32_t)g_initramfs_addr);
+    uart_send_string("\r\n");
+    uart_send_hex((uint32_t)g_initramfs_size);
+    uart_send_string("\r\n");
     uart_send_string("[main] start shell\r\n");
     shell();
     uart_send_string("[main] shell error\r\n");

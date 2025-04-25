@@ -1,6 +1,7 @@
 define kernel
   file kernel8.elf
   target remote :1234
+  b list_cpio_files
   b thread_create
   # b idle
   # b thread_init
