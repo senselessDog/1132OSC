@@ -66,7 +66,7 @@ void thread_init(void) {
     // 保存當前 kernel 的堆疊指針
     uint64_t kernel_sp;
     asm volatile("mov %0, sp" : "=r"(kernel_sp));
-    kernel_thread->sp = kernel_sp;
+    kernel_thread->thread_context.sp = kernel_sp;
 
     current_thread = kernel_thread;
     add_to_run_queue(kernel_thread);
@@ -88,24 +88,20 @@ thread_t *thread_create(void (*entry_point)(void)) {
     new_thread->next = NULL;
     
     void *stack_top = &new_thread->stack[THREAD_STACK_SIZE - 1];
-        uint64_t thread_sp = (uint64_t)stack_top;
-        uint64_t new_thread->fp = (uint64_t)stack_top;
-    if (fork_flag) {
+    new_thread->thread_context.sp = (uint64_t)stack_top;
+    new_thread->thread_context.fp = (uint64_t)stack_top;
+    new_thread->thread_context.lr = (uint64_t)entry_point;
 
-    }    
-    else{// Initialize stack
-        uint64_t new_thread->lr = (uint64_t)entry_point;
-    }
     
     // Add to thread list
     add_to_run_queue(new_thread);
-    new_thread->sp = thread_sp-7*16;
+    //new_thread->context.sp = thread_sp-7*16;
     uart_send_string("new thread sp: ");
-    uart_send_int(new_thread->sp);
+    uart_send_int(new_thread->thread_context.sp);
     uart_send_string("\r\n");
-    thread_create_save(new_thread->sp, thread_fp, thread_lr);
+    // thread_create_save(new_thread->thread_context.sp, new_thread->thread_context.fp, new_thread->thread_context.lr);
     uart_send_string("new thread sp: ");
-    uart_send_int(new_thread->sp);
+    uart_send_int(new_thread->thread_context.sp);
     uart_send_string("\r\n");
     return new_thread;
 }
@@ -157,25 +153,25 @@ void schedule(void) {
     current_thread->state = THREAD_RUNNING;
 
     //update prev thread sp
-    uint64_t prev_thread_sp;
-    asm volatile("mov %0, sp" : "=r"(prev_thread_sp));
-    prev->sp = prev_thread_sp-7*16;
+    // uint64_t prev_thread_sp;
+    // asm volatile("mov %0, sp" : "=r"(prev_thread_sp));
+    // prev->sp = prev_thread_sp-7*16;
     //Don't habe to deal with current thread sp
     //current thread sp is already updated in switch.S
     uart_send_string("switch to thread: ");
     uart_send_int(current_thread->id);
     uart_send_string("\r\n");
     uart_send_string("current sp: ");
-    uart_send_int(current_thread->sp);
+    uart_send_int(current_thread->thread_context.sp);
     uart_send_string("\r\n");
     uart_send_string("prev sp: ");
-    uart_send_int(prev->sp);
+    uart_send_int(prev->thread_context.sp);
     uart_send_string("\r\n");
     
 
     // Call assembly function to switch context
-    extern void switch_to(uint64_t *prev_sp, uint64_t *current_sp, thread_t *current_thread);
-    switch_to(prev->sp, current_thread->sp, current_thread);
+    extern void switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
+    switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);
 }
 
 thread_t *get_current_thread(void) {

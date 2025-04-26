@@ -277,13 +277,13 @@ void kernel_main(void *dtb_addr)
     buddy_init();
     init_dynamic_allocator();
     thread_init();
-    // create multiple threads
-    // for(int i = 0; i < 3; i++) {
-    //     thread_create(thread_test);
-    // }
+    //create multiple threads
+    for(int i = 0; i < 3; i++) {
+        thread_create(thread_test);
+    }
     
-    // // Start idle thread
-    // idle();
+    // Start idle thread
+    idle();
     uart_send_string("[main] start shell\r\n");
     shell();
     uart_send_string("[main] shell error\r\n");

@@ -13,15 +13,22 @@ typedef enum {
     THREAD_DEAD
 } thread_state_t;
 
+typedef struct {
+    uint64_t x19,x20;  // 16 * 0
+    uint64_t x21,x22;  // 16 * 1
+    uint64_t x23,x24;  // 16 * 2
+    uint64_t x25,x26;  // 16 * 3
+    uint64_t x27,x28;  // 16 * 4
+    uint64_t fp,lr;  // 16 * 5
+    uint64_t sp;  // 16 * 6
+} thread_context_block_t;
 
 typedef struct {
     int id;
     thread_state_t state;
     void (*entry_point)(void);
     void* stack[THREAD_STACK_SIZE];
-    uint64_t sp;  // 只需要保存堆疊指針
-    uint64_t fp;  // 只需要保存堆疊指針
-    uint64_t lr;  // 只需要保存堆疊指針
+    thread_context_block_t thread_context;
     struct thread *next;
 } thread_t;
 

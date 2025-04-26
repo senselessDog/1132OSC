@@ -31,9 +31,9 @@ void sync_lower_el_64_entry(int syscall_number)
     asm volatile("mrs %0, esr_el1" : "=r"(esr));     // 讀取 ESR_EL1
     unsigned int ec = (esr >> 26) & 0x3f;           // 取得 Exception Class
 
-    if (ec == 0b010101) { // 判斷是不是 SVC
-        handle_syscall(syscall_number);
-    }
+    // if (ec == 0b010101) { // 判斷是不是 SVC
+    //     handle_syscall(syscall_number);
+    // }
     // Read exception-related registers
     // unsigned long spsr, elr, esr;
 
