@@ -38,7 +38,7 @@ void el0_core_timer_enable(void)
 void switch_to_el0(void *start_addr, void *stack_ptr)
 {
     // perpare for this function
-    el0_core_timer_enable();
+    //el0_core_timer_enable();
     asm volatile(
         "msr spsr_el1, %0\n"
         "msr elr_el1, %1\n"
@@ -92,5 +92,7 @@ void run_user(char *archive)
     uart_send_string("Executing program: ");
     uart_send_string(filename);
     uart_send_string("\r\n");
-    switch_to_el0((void *)USER_PROGRAM_BASE, (void *)USER_STACK_POINTER_BASE);
+    uint32_t user_space_size=32768;
+    void * user_base=dynamic_malloc(user_space_size);
+    switch_to_el0((void *)user_base, (void *)(user_base+user_space_size));
 }

@@ -284,12 +284,6 @@ void kernel_main(void *dtb_addr)
     
     // // Start idle thread
     // idle();
-    uart_send_hex((uint32_t)dtb_addr);
-    uart_send_string("\r\n");
-    uart_send_hex((uint32_t)g_initramfs_addr);
-    uart_send_string("\r\n");
-    uart_send_hex((uint32_t)g_initramfs_size);
-    uart_send_string("\r\n");
     uart_send_string("[main] start shell\r\n");
     shell();
     uart_send_string("[main] shell error\r\n");

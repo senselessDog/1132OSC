@@ -87,13 +87,15 @@ thread_t *thread_create(void (*entry_point)(void)) {
     new_thread->entry_point = entry_point;
     new_thread->next = NULL;
     
-
-    // Initialize stack
     void *stack_top = &new_thread->stack[THREAD_STACK_SIZE - 1];
-    uint64_t thread_sp = (uint64_t)stack_top;
-    uint64_t thread_fp = (uint64_t)stack_top;
-    uint64_t thread_lr = (uint64_t)entry_point;
-    
+        uint64_t thread_sp = (uint64_t)stack_top;
+        uint64_t new_thread->fp = (uint64_t)stack_top;
+    if (fork_flag) {
+
+    }    
+    else{// Initialize stack
+        uint64_t new_thread->lr = (uint64_t)entry_point;
+    }
     
     // Add to thread list
     add_to_run_queue(new_thread);

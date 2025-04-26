@@ -20,8 +20,23 @@ typedef struct {
     void (*entry_point)(void);
     void* stack[THREAD_STACK_SIZE];
     uint64_t sp;  // 只需要保存堆疊指針
+    uint64_t fp;  // 只需要保存堆疊指針
+    uint64_t lr;  // 只需要保存堆疊指針
     struct thread *next;
 } thread_t;
+
+// --- System Call Numbers ---
+#define SYS_GETPID      0
+#define SYS_UART_READ   1
+#define SYS_UART_WRITE  2
+#define SYS_EXEC        3
+#define SYS_FORK        4
+#define SYS_EXIT        5
+#define SYS_MBOX_CALL   6
+#define SYS_KILL        7
+#define SYS_SIGNAL      8
+#define SYS_KILL_SIG    9
+// Add more if needed, e.g., for signals later
 
 // Thread management functions
 void thread_init(void);
@@ -34,4 +49,10 @@ void idle(void);
 void kill_zombie_thread(void);
 void thread_test(void);
 
+// // --- External assembly functions ---
+// extern void switch_to(kcontext_t *prev_ctx, kcontext_t *next_ctx);
+// extern thread_t *get_current(void); // Gets current thread TCB pointer from TPIDR_EL1
+// extern void set_current(thread_t *thd); // Sets TPIDR_EL1
+// extern void init_vectors(void); // Initializes exception vectors
+// extern void el1_to_el0(uint64_t elr, uint64_t spsr, uint64_t sp_el0); // Assembly helper for eret
 #endif // THREAD_H 

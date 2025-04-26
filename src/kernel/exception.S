@@ -30,7 +30,7 @@
     ldp x28, x29, [sp, 16 * 16]
     msr spsr_el1, x28
     msr elr_el1, x29
-    ldp x0, x1, [sp, 16 * 0]
+    ldp x29, x1, [sp, 16 * 0]  // Use x29 instead of x0 to preserve syscall return value
     ldp x2, x3, [sp, 16 * 1]
     ldp x4, x5, [sp, 16 * 2]
     ldp x6, x7, [sp, 16 * 3]
@@ -67,8 +67,12 @@ sync_lower_el_64_handler:
     //msr DAIFSet, 0xf
     msr SPSel, #1
     save_all
+    // Get system call number from x8
+    mov x0, x8
     bl sync_lower_el_64_entry
     bl process_task_queue
+    // 處理調度
+    //bl schedule
     load_all
     //msr DAIFClr, 0xf
     eret
@@ -94,6 +98,8 @@ exception_vector_table:
     .align 7
     b default_exception_handler        // Current EL with SP_EL0 - SError
     .align 7
+
+    // Exception from Current EL with SPx (EL1 -> EL1 using SP_EL1)
     b default_exception_handler        // Current EL with SP_ELx - Synchronous
     .align 7
     b el1_irq_exception_handler        // Current EL with SP_ELx - IRQ
@@ -102,6 +108,8 @@ exception_vector_table:
     .align 7
     b default_exception_handler        // Current EL with SP_ELx - SError
     .align 7
+
+    // Exception from Lower EL using AArch64 (EL0 -> EL1)
     b sync_lower_el_64_handler         // Lower EL using AArch64 - Synchronous (need to do)
     .align 7
     b lower_el_irq_exception_handler        // Lower EL using AArch64 - IRQ
@@ -110,6 +118,8 @@ exception_vector_table:
     .align 7
     b default_exception_handler        // Lower EL using AArch64 - SError
     .align 7
+
+    // Exception from Lower EL using AArch32 (Not used)
     b default_exception_handler        // Lower EL using AArch32 - Synchronous
     .align 7
     b default_exception_handler        // Lower EL using AArch32 - IRQ
