@@ -10,6 +10,22 @@ thread_create_save:
     mov x9, x0
     str x9, [x0, 16 * 6]
     ret
+.global thread_inherit_save
+thread_inherit_save:
+    //load from parent's tcb 
+    ldp x18, x19, [x0, 16 * 9]
+    ldp x20, x21, [x0, 16 * 10]
+    ldp x22, x23, [x0, 16 * 11]
+    ldp x24, x25, [x0, 16 * 12]
+    ldp x26, x27, [x0, 16 * 13]
+    ldp x28, x29, [x0, 16 * 14]
+    //store to child's tcb 
+    stp x19, x20, [x1, 16 * 0]
+    stp x21, x22, [x1, 16 * 1]
+    stp x23, x24, [x1, 16 * 2]
+    stp x25, x26, [x1, 16 * 3]
+    stp x27, x28, [x1, 16 * 4]
+    ret
 .global switch_to
 switch_to:
     stp x19, x20, [x0, 16 * 0]

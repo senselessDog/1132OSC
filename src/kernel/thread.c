@@ -1,6 +1,7 @@
 #include "thread.h"
 #include "uart.h"
 #include "buddy_alloc.h"
+#include "syscall.h"
 #include <stddef.h>
 
 static thread_t *current_thread = NULL;
@@ -12,10 +13,14 @@ static void add_to_run_queue(thread_t *thd) {
         run_queue = thd;
         thd->next = thd; // Point to itself for circularity
     } else {
-        thd->next = run_queue->next;
-        run_queue->next = thd;
-        // Optional: keep run_queue pointing to the 'last' element for easier tail insertion
-        // run_queue = thd; // If run_queue points to last element
+        // Traverse to the end of the queue
+        thread_t *current = run_queue;
+        while (current->next != run_queue) {
+            current = current->next;
+        }
+        // Add new thread at the end
+        thd->next = run_queue;
+        current->next = thd;
     }
     thd->state = THREAD_READY;
 }
@@ -73,7 +78,7 @@ void thread_init(void) {
     uart_send_string("Thread system initialized. Idle thread created.\r\n");
 }
 
-thread_t *thread_create(void (*entry_point)(void)) {
+thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     // Allocate memory for new thread
     thread_t *new_thread = (thread_t *)dynamic_malloc(sizeof(thread_t));
     if (!new_thread) {
@@ -87,21 +92,28 @@ thread_t *thread_create(void (*entry_point)(void)) {
     new_thread->entry_point = entry_point;
     new_thread->next = NULL;
     
-    void *stack_top = &new_thread->stack[THREAD_STACK_SIZE - 1];
-    new_thread->thread_context.sp = (uint64_t)stack_top;
+    new_thread->thread_stack_alloc_ptr=dynamic_malloc(THREAD_STACK_SIZE);
+    void *stack_top = &new_thread->thread_stack_alloc_ptr[THREAD_STACK_SIZE];
+    
     new_thread->thread_context.fp = (uint64_t)stack_top;
-    new_thread->thread_context.lr = (uint64_t)entry_point;
-
+    if (entry_point==NULL) { //fork
+        new_thread->thread_context.sp = (uint64_t)stack_top-(frame->x29-frame->sp_el0);
+        new_thread->thread_context.lr = (uint64_t)frame->elr_el1;
+        thread_inherit_save(frame, new_thread->thread_context);
+    }else{
+        new_thread->thread_context.sp = (uint64_t)stack_top;
+        new_thread->thread_context.lr = (uint64_t)entry_point;
+    }
     
     // Add to thread list
     add_to_run_queue(new_thread);
     //new_thread->context.sp = thread_sp-7*16;
-    uart_send_string("new thread sp: ");
-    uart_send_int(new_thread->thread_context.sp);
+    uart_send_string("new thread fp: ");
+    uart_send_hex(new_thread->thread_context.fp);
     uart_send_string("\r\n");
     // thread_create_save(new_thread->thread_context.sp, new_thread->thread_context.fp, new_thread->thread_context.lr);
     uart_send_string("new thread sp: ");
-    uart_send_int(new_thread->thread_context.sp);
+    uart_send_hex(new_thread->thread_context.sp);
     uart_send_string("\r\n");
     return new_thread;
 }
@@ -151,6 +163,10 @@ void schedule(void) {
     prev->state = THREAD_READY;
     current_thread = next;
     current_thread->state = THREAD_RUNNING;
+    
+    while(prev==current_thread){
+        return;
+    };
 
     //update prev thread sp
     // uint64_t prev_thread_sp;
@@ -158,17 +174,27 @@ void schedule(void) {
     // prev->sp = prev_thread_sp-7*16;
     //Don't habe to deal with current thread sp
     //current thread sp is already updated in switch.S
-    uart_send_string("switch to thread: ");
+    uart_send_string("[schedule] switch to thread: ");
     uart_send_int(current_thread->id);
     uart_send_string("\r\n");
     uart_send_string("current sp: ");
-    uart_send_int(current_thread->thread_context.sp);
+    uart_send_hex(current_thread->thread_context.sp);
     uart_send_string("\r\n");
     uart_send_string("prev sp: ");
-    uart_send_int(prev->thread_context.sp);
+    uart_send_hex(prev->thread_context.sp);
     uart_send_string("\r\n");
-    
-
+    asm volatile("mov %0, sp" : "=r"(prev->thread_context.sp));
+    asm volatile("mov %0, fp" : "=r"(prev->thread_context.fp));
+    asm volatile("mov %0, lr" : "=r"(prev->thread_context.lr));
+    uart_send_string("[schedule] prev sp: ");
+    uart_send_hex(prev->thread_context.sp);
+    uart_send_string("\r\n");
+    uart_send_string("[schedule] prev fp: ");
+    uart_send_hex(prev->thread_context.fp);
+    uart_send_string("\r\n");
+    uart_send_string("[schedule] prev lr: ");
+    uart_send_hex(prev->thread_context.lr);
+    uart_send_string("\r\n");
     // Call assembly function to switch context
     extern void switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
     switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);

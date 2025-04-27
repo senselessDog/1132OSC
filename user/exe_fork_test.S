@@ -1,8 +1,6 @@
 .section ".text"
 .global _start
 _start:
-    mov x0, 0
-1:
-    svc 0
-2:
-    b 2b
+    bl fork_test
+1: 
+    b 1b

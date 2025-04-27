@@ -2,7 +2,7 @@
 #define THREAD_H
 
 #include <stdint.h>
-
+#include "syscall.h"
 #define THREAD_STACK_SIZE 4096
 #define MAX_THREADS 64
 
@@ -20,14 +20,14 @@ typedef struct {
     uint64_t x25,x26;  // 16 * 3
     uint64_t x27,x28;  // 16 * 4
     uint64_t fp,lr;  // 16 * 5
-    uint64_t sp;  // 16 * 6
+    uint64_t sp,base_addr;  // 16 * 6
 } thread_context_block_t;
 
 typedef struct {
     int id;
     thread_state_t state;
     void (*entry_point)(void);
-    void* stack[THREAD_STACK_SIZE];
+    void* thread_stack_alloc_ptr;
     thread_context_block_t thread_context;
     struct thread *next;
 } thread_t;
@@ -47,7 +47,7 @@ typedef struct {
 
 // Thread management functions
 void thread_init(void);
-thread_t *thread_create(void (*entry_point)(void));
+thread_t *thread_create(void (*entry_point)(void),trap_frame_t *frame);
 void thread_exit(void);
 void schedule(void);
 void thread_create_save(uint64_t thread_sp, uint64_t thread_fp, uint64_t thread_lr);

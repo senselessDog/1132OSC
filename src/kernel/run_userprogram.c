@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "strcmp.h"
-
+#include "thread.h"
 struct file_information find_program_in_initramfs(char *archive, const char *filename);
 void uart_send_string(const char *str);
 void uart_send(char c);
@@ -9,7 +9,7 @@ char uart_recv();
 
 #define USER_PROGRAM_BASE 0x20000000
 #define USER_STACK_POINTER_BASE 0x21000000
-
+uint32_t user_space_size=65536;
 struct file_information
 {
     void *filecontext;
@@ -39,12 +39,20 @@ void switch_to_el0(void *start_addr, void *stack_ptr)
 {
     // perpare for this function
     //el0_core_timer_enable();
+    uart_send_string("switch_to_el0\r\n");
+    uart_send_string("start_addr: ");
+    uart_send_hex(start_addr);
+    uart_send_string("\r\n");
+    uart_send_string("stack_ptr: ");
+    uart_send_hex(stack_ptr);
+    uart_send_string("\r\n");
     asm volatile(
         "msr spsr_el1, %0\n"
         "msr elr_el1, %1\n"
         "msr sp_el0, %2\n"
-        "eret\n" ::"r"(0x0),
+         ::"r"(0x0),
         "r"(start_addr), "r"(stack_ptr));
+    
 }
 
 void run_user(char *archive)
@@ -84,15 +92,31 @@ void run_user(char *archive)
     // Allocate user stack (4KB)
     // For bare metal, we'll use a static buffer instead of malloc
     // static char user_stack[4096] __attribute__((aligned(16)));
-
-    // Stack pointer should point to the top because stack grows downward
-    void *user_program = (void *)USER_PROGRAM_BASE;
-    memcpy(user_program, program_info.filecontext, (uint32_t)program_info.filesize);
-
     uart_send_string("Executing program: ");
     uart_send_string(filename);
     uart_send_string("\r\n");
-    uint32_t user_space_size=32768;
+    uart_send_string("program_info.filesize: ");
+    uart_send_hex(program_info.filesize);
+    uart_send_string("\r\n");
+    // Stack pointer should point to the top because stack grows downward
+    
     void * user_base=dynamic_malloc(user_space_size);
-    switch_to_el0((void *)user_base, (void *)(user_base+user_space_size));
+    uart_send_string("Create parent thread: ");
+    thread_t * parent_thread=thread_create(user_base,NULL);
+    uart_send_string("Create parent thread success\r\n");
+    void * user_stack=parent_thread->thread_context.sp;
+    memcpy(user_base, program_info.filecontext, (uint32_t)program_info.filesize);
+
+    
+    uart_send_string("user_base: ");
+    uart_send_hex(user_base);
+    uart_send_string("\r\n");
+    uart_send_string("user_stack: ");
+    uart_send_hex(user_stack);
+    uart_send_string("\r\n");
+    switch_to_el0(user_base, user_stack);
+    uart_send_string("Parent thread start\r\n");
+    
+    idle();
+
 }
