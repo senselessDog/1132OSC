@@ -30,6 +30,7 @@ typedef struct {
     void* thread_stack_alloc_ptr;
     thread_context_block_t thread_context;
     struct thread *next;
+    void* fp;
 } thread_t;
 
 // --- System Call Numbers ---

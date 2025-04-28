@@ -79,7 +79,7 @@
 // load general registers from stack
 .macro svc_load_all
     ldp x30, x28,[sp, 16 * 15]
-    msr sp_el0, x28
+    //msr sp_el0, x28
     ldp x28, x29, [sp, 16 * 16]
     msr spsr_el1, x28
     msr elr_el1, x29
@@ -120,11 +120,15 @@ sync_lower_el_64_handler:
     //msr DAIFSet, 0xf
     msr SPSel, #1
     svc_save_all
+    //bl test_eret
     // Get system call number from x8
     bl sync_lower_el_64_entry
+    //bl test_eret
     bl process_task_queue
     // 處理調度
-    //bl schedule
+    //bl test_eret
+    //bl svc_schedule
+    //bl test_eret
     svc_load_all
     //msr DAIFClr, 0xf
     eret

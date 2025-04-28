@@ -6,7 +6,7 @@ struct file_information find_program_in_initramfs(char *archive, const char *fil
 void uart_send_string(const char *str);
 void uart_send(char c);
 char uart_recv();
-
+void * user_stack;
 #define USER_PROGRAM_BASE 0x20000000
 #define USER_STACK_POINTER_BASE 0x21000000
 uint32_t user_space_size=65536;
@@ -52,6 +52,7 @@ void switch_to_el0(void *start_addr, void *stack_ptr)
         "msr sp_el0, %2\n"
          ::"r"(0x0),
         "r"(start_addr), "r"(stack_ptr));
+    asm volatile("eret\n");
     
 }
 
@@ -101,12 +102,12 @@ void run_user(char *archive)
     // Stack pointer should point to the top because stack grows downward
     
     void * user_base=dynamic_malloc(user_space_size);
-    uart_send_string("Create parent thread: ");
-    thread_t * parent_thread=thread_create(user_base,NULL);
-    uart_send_string("Create parent thread success\r\n");
-    void * user_stack=parent_thread->thread_context.sp;
+    // uart_send_string("Create parent thread: ");
+    // thread_t * parent_thread=thread_create(user_base,NULL);
+    // uart_send_string("Create parent thread success\r\n");
+    user_stack=user_base+user_space_size;
     memcpy(user_base, program_info.filecontext, (uint32_t)program_info.filesize);
-
+    thread_init_user();
     
     uart_send_string("user_base: ");
     uart_send_hex(user_base);
@@ -115,8 +116,8 @@ void run_user(char *archive)
     uart_send_hex(user_stack);
     uart_send_string("\r\n");
     switch_to_el0(user_base, user_stack);
-    uart_send_string("Parent thread start\r\n");
-    
-    idle();
+    // uart_send_string("Parent thread start\r\n");
+    //asm volatile("eret\n");
+    // idle();
 
 }

@@ -72,12 +72,36 @@ void thread_init(void) {
     uint64_t kernel_sp;
     asm volatile("mov %0, sp" : "=r"(kernel_sp));
     kernel_thread->thread_context.sp = kernel_sp;
+    extern void * user_stack;
+    kernel_thread->fp = user_stack;
 
     current_thread = kernel_thread;
     add_to_run_queue(kernel_thread);
     uart_send_string("Thread system initialized. Idle thread created.\r\n");
 }
+void thread_init_user(void) {
+    current_thread = NULL;
+    run_queue = NULL;
+    next_thread_id = 1;
 
+    // 創建一個特殊的 kernel 線程
+    thread_t *kernel_thread = (thread_t *)dynamic_malloc(sizeof(thread_t));
+    kernel_thread->id = 0;  // kernel 線程的 ID 為 0
+    kernel_thread->state = THREAD_RUNNING;
+    kernel_thread->entry_point = NULL;
+    kernel_thread->next = NULL;
+
+    // 保存當前 kernel 的堆疊指針
+    extern void * user_stack;
+    kernel_thread->thread_context.sp = user_stack;
+    kernel_thread->thread_context.fp = user_stack;
+    
+    kernel_thread->fp = user_stack;
+
+    current_thread = kernel_thread;
+    add_to_run_queue(kernel_thread);
+    uart_send_string("Thread system initialized. Idle thread created.\r\n");
+}
 thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     // Allocate memory for new thread
     thread_t *new_thread = (thread_t *)dynamic_malloc(sizeof(thread_t));
@@ -95,12 +119,22 @@ thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     new_thread->thread_stack_alloc_ptr=dynamic_malloc(THREAD_STACK_SIZE);
     void *stack_top = &new_thread->thread_stack_alloc_ptr[THREAD_STACK_SIZE];
     
-    new_thread->thread_context.fp = (uint64_t)stack_top;
+    new_thread->fp = stack_top;
+    
     if (entry_point==NULL) { //fork
-        new_thread->thread_context.sp = (uint64_t)stack_top-(frame->x29-frame->sp_el0);
+        
+        new_thread->thread_context.fp = (uint64_t)stack_top;
+        uint32_t kernel_sp; 
+        asm volatile("mov %0, sp" : "=r"(kernel_sp));  
+        new_thread->thread_context.sp = (uint64_t)kernel_sp;
         new_thread->thread_context.lr = (uint64_t)frame->elr_el1;
+        uart_send_string("new thread lr: ");
+        uart_send_hex(new_thread->thread_context.lr);
+        uart_send_string("\r\n");
+        //之後sp、lr也會再switch_to中進行修改
         thread_inherit_save(frame, new_thread->thread_context);
     }else{
+        new_thread->thread_context.fp = (uint64_t)stack_top;
         new_thread->thread_context.sp = (uint64_t)stack_top;
         new_thread->thread_context.lr = (uint64_t)entry_point;
     }
@@ -132,7 +166,85 @@ void thread_exit(void) {
         while(1);
     }
 }
+void user_thread_exit(void) {
+    thread_t * delete_thread = get_current(); // Ensure current_thread is up-to-date
+    if (delete_thread) {
+        uart_send_string("Thread ID: ");
+        uart_send_int(delete_thread->id);
+        uart_send_string(" exiting.\r\n");
+        delete_thread->state = THREAD_DEAD;
+        remove_from_run_queue(delete_thread); // Remove from scheduling
+        process_schedule(); // Switch to another thread
+        // Should not return here
+        uart_send_string("Error: Exited thread returned!\r\n");
+        while(1);
+    }
+}
+void process_schedule(void) {
+    if (!run_queue) {
+        return;
+    }
 
+    // Find next ready thread
+    thread_t *next = current_thread->next;
+    while (next) {
+        if (next->state == THREAD_READY) {
+            break;
+        }
+        else if (next == current_thread && next->state == THREAD_RUNNING) {
+            break;
+        }
+        next = next->next;
+    }
+
+    // If no ready thread found, use idle thread
+    if (!next) {
+        idle();
+        return;
+    }
+    
+
+    // Switch context
+    thread_t *prev = current_thread;
+    prev->state = THREAD_READY;
+    current_thread = next;
+    current_thread->state = THREAD_RUNNING;
+    
+    while(prev->pid==current_thread->pid){
+        return;
+    };
+
+    //update prev thread sp
+    // uint64_t prev_thread_sp;
+    // asm volatile("mov %0, sp" : "=r"(prev_thread_sp));
+    // prev->sp = prev_thread_sp-7*16;
+    //Don't habe to deal with current thread sp
+    //current thread sp is already updated in switch.S
+    uart_send_string("[schedule] switch to thread: ");
+    uart_send_int(current_thread->id);
+    uart_send_string("\r\n");
+    uart_send_string("current sp: ");
+    uart_send_hex(current_thread->thread_context.sp);
+    uart_send_string("\r\n");
+    uart_send_string("prev sp: ");
+    uart_send_hex(prev->thread_context.sp);
+    uart_send_string("\r\n");
+    asm volatile("mov %0, sp" : "=r"(prev->thread_context.sp));
+    asm volatile("mov %0, fp" : "=r"(prev->thread_context.fp));
+    asm volatile("mov %0, lr" : "=r"(prev->thread_context.lr));
+    uart_send_string("[schedule] prev sp: ");
+    uart_send_hex(prev->thread_context.sp);
+    uart_send_string("\r\n");
+    uart_send_string("[schedule] prev fp: ");
+    uart_send_hex(prev->thread_context.fp);
+    uart_send_string("\r\n");
+    uart_send_string("[schedule] prev lr: ");
+    uart_send_hex(prev->thread_context.lr);
+    uart_send_string("\r\n");
+    // Call assembly function to switch context
+    extern void process_switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
+    process_switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);
+}
 
 void schedule(void) {
     if (!run_queue) {
@@ -163,8 +275,7 @@ void schedule(void) {
     prev->state = THREAD_READY;
     current_thread = next;
     current_thread->state = THREAD_RUNNING;
-    
-    while(prev==current_thread){
+    while(prev->pid==current_thread->pid){
         return;
     };
 
@@ -199,7 +310,147 @@ void schedule(void) {
     extern void switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
     switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);
 }
+void fork_schedule(uint64_t parent_sp) {
+    trap_frame_t *frame = (trap_frame_t *)parent_sp;
+    if (!run_queue) {
+        return;
+    }
 
+    // Find next ready thread
+    thread_t *next = current_thread->next;
+    while (next) {
+        if (next->state == THREAD_READY) {
+            break;
+        }
+        else if (next == current_thread && next->state == THREAD_RUNNING) {
+            break;
+        }
+        next = next->next;
+    }
+
+    // If no ready thread found, use idle thread
+    if (!next) {
+        idle();
+        return;
+    }
+    
+
+    // Switch context
+    thread_t *prev = current_thread;
+    prev->state = THREAD_READY;
+    current_thread = next;
+    current_thread->state = THREAD_RUNNING;
+    
+    while(prev->pid==current_thread->pid){
+        return;
+    };
+    uint64_t kernel_sp, kernel_lr;
+    asm volatile("mov %0, sp" : "=r"(kernel_sp));
+    current_thread->thread_context.sp = kernel_sp;
+    asm volatile("mov %0, lr" : "=r"(kernel_lr));
+    current_thread->thread_context.lr = kernel_lr;
+    //update prev thread sp
+    // uint64_t prev_thread_sp;
+    // asm volatile("mov %0, sp" : "=r"(prev_thread_sp));
+    // prev->sp = prev_thread_sp-7*16;
+    //Don't habe to deal with current thread sp
+    //current thread sp is already updated in switch.S
+    uart_send_string("[schedule] switch to thread: ");
+    uart_send_int(current_thread->id);
+    uart_send_string("\r\n");
+    uart_send_string("current sp: ");
+    uart_send_hex(current_thread->thread_context.sp);
+    uart_send_string("\r\n");
+    uart_send_string("prev sp: ");
+    uart_send_hex(prev->thread_context.sp);
+    uart_send_string("\r\n");
+    asm volatile("mov %0, sp" : "=r"(prev->thread_context.sp));
+    asm volatile("mov %0, fp" : "=r"(prev->thread_context.fp));
+    asm volatile("mov %0, lr" : "=r"(prev->thread_context.lr));
+    // uart_send_string("[schedule] prev sp: ");
+    // uart_send_hex(prev->thread_context.sp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] prev fp: ");
+    // uart_send_hex(prev->thread_context.fp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] prev lr: ");
+    // uart_send_hex(prev->thread_context.lr);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] current sp: ");
+    // uart_send_hex(current_thread->thread_context.sp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] current fp: ");
+    // uart_send_hex(current_thread->thread_context.fp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] current lr: ");
+    // uart_send_hex(current_thread->thread_context.lr);
+    // uart_send_string("\r\n");
+    // uart_send_string("sp0: ");
+    uint64_t sp0,elr_el1,spsr_el1;
+    asm volatile("mrs %0, sp_el0" : "=r"(sp0));
+    uart_send_hex(sp0);
+    uart_send_string("\r\n");
+    uart_send_string("elr_el1: ");
+    asm volatile("mrs %0, elr_el1" : "=r"(elr_el1));
+    uart_send_hex(elr_el1);
+    uart_send_string("\r\n");
+    uart_send_string("spsr_el1: ");
+    asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
+    uart_send_hex(spsr_el1);
+    uart_send_string("\r\n");
+    uart_send_string("prev user fp: ");
+    uart_send_hex(prev->fp);
+    uart_send_string("\r\n");
+    uart_send_string("next user fp: ");
+    uart_send_hex(next->fp);
+    uart_send_string("\r\n");
+    memcpy((void *)(next->fp-THREAD_STACK_SIZE), (void *)(prev->fp-THREAD_STACK_SIZE), THREAD_STACK_SIZE);
+    asm volatile("msr sp_el0,%0 " : :"r"(next->thread_context.fp-((uint64_t)prev->fp-frame->sp_el0)));
+    // uart_send_string("prev user fp: ");
+    // uart_send_hex(frame->x29);
+    // uart_send_string("\r\n");
+    // uart_send_string("prev user sp: ");
+    // uart_send_hex(frame->sp_el0);
+    // uart_send_string("\r\n");
+    // asm volatile("msr sp_el0,%0 " : :"r"(current_thread->thread_context.fp-(frame->x29-frame->sp_el0)));
+    //asm volatile("msr elr_el1,%0 " : :"r"(frame->elr_el1));
+    //asm volatile("msr spsr_el1,%0 " : :"r"(0));
+
+    uart_send_string("sp0: ");
+    asm volatile("mrs %0, sp_el0" : "=r"(sp0));
+    uart_send_hex(sp0);
+    uart_send_string("\r\n");
+    uart_send_string("elr_el1: ");
+    asm volatile("mrs %0, elr_el1" : "=r"(elr_el1));
+    uart_send_hex(elr_el1);
+    uart_send_string("\r\n");
+    uart_send_string("spsr_el1: ");
+    asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
+    uart_send_hex(spsr_el1);
+    uart_send_string("\r\n");
+    // Call assembly function to switch context
+    extern void svc_switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
+    svc_switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);
+    // uart_send_string("[schedule] prev sp: ");
+    // uart_send_hex(prev->thread_context.sp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] prev fp: ");
+    // uart_send_hex(prev->thread_context.fp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] prev lr: ");
+    // uart_send_hex(prev->thread_context.lr);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] current sp: ");
+    // uart_send_hex(current_thread->thread_context.sp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] current fp: ");
+    // uart_send_hex(current_thread->thread_context.fp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[schedule] current lr: ");
+    // uart_send_hex(current_thread->thread_context.lr);
+    // uart_send_string("\r\n");
+
+}
 thread_t *get_current_thread(void) {
     return current_thread;
 }
@@ -253,4 +504,17 @@ void thread_test() {
         schedule();
     }
     thread_exit();
+}
+
+void test_eret(void) {
+    uint64_t elr_el1,sp_el0;
+    uart_send_string("elr_el1: \r\n");
+    asm volatile("mrs %0, elr_el1":: "r"(elr_el1));
+    uart_send_hex(elr_el1);
+    uart_send_string("\r\n");
+    uart_send_string("sp_el0: \r\n");
+    asm volatile("mrs %0, sp_el0":: "r"(sp_el0));
+    uart_send_hex(sp_el0);
+    uart_send_string("\r\n");
+    return;
 }

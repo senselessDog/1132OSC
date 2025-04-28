@@ -178,7 +178,7 @@ void fork_test() {
 
         ret = sys_fork(); // Fork again
 
-        if (ret == 0) { // First child (now parent of second child)
+        if (ret != 0) { // First child (now parent of second child)
             asm volatile("mov %0, sp" : "=r"(cur_sp));
             pid = sys_get_pid();
             

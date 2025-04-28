@@ -108,6 +108,12 @@ int sys_fork(trap_frame_t *frame) {
     uart_send_string("\r\n");
     
     //copy stack space
+    uart_send_string("[system call] frame->sp_el0: ");
+    uart_send_hex(frame->sp_el0);
+    uart_send_string("\r\n");
+    uart_send_string("[system call] frame->x29: ");
+    uart_send_hex(frame->x29);
+    uart_send_string("\r\n");
     uint32_t parent_thread_stack_size=frame->x29-frame->sp_el0;
     uart_send_string("Parent thread_stack_size ");
     uart_send_int(parent_thread_stack_size);
@@ -115,7 +121,7 @@ int sys_fork(trap_frame_t *frame) {
     // extern uint32_t user_space_size;
     // void * child_base=dynamic_malloc(user_space_size);
     // memcpy(child_base, (void *)frame->sp_el0, parent_thread_stack_size);
-    memcpy((void *)child->thread_context.fp-THREAD_STACK_SIZE, (void *)frame->x29-THREAD_STACK_SIZE, THREAD_STACK_SIZE);
+    
     // // 從棧上的 trap frame 中讀取 elr_el1 和 spsr_el1
     // asm volatile("ldr x0, [sp, %0]" : : "r"(16 * 16));  // elr_el1
     // asm volatile("mrs x1, tpidr_el1");
@@ -124,8 +130,19 @@ int sys_fork(trap_frame_t *frame) {
     // asm volatile("ldr x0, [sp, %0]" : : "r"(16 * 16 + 8));  // spsr_el1
     // asm volatile("mrs x1, tpidr_el1");
     // asm volatile("str x0, [x1, %0]" : : "r"(33 * 8));
-    
-    return child->id;
+
+    uint64_t parent_sp_el0=frame->sp_el0;
+    // memcpy((void *)child->thread_context.fp-THREAD_STACK_SIZE, (void *)frame->x29-THREAD_STACK_SIZE, THREAD_STACK_SIZE);
+    // frame->sp_el0=child->thread_context.fp-(frame->x29-frame->sp_el0);
+    fork_schedule(frame);
+    uint64_t sp_el0;
+    asm volatile("mrs %0, sp_el0" : "=r"(sp_el0));
+    if (sp_el0==parent_sp_el0){ //parent thread
+        return child->id;
+    }
+    else{ //child thread
+        return 0;
+    }
 }
 
 void sys_exit(int status) {
