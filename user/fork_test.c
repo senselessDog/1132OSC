@@ -140,7 +140,7 @@ void print_str(const char *str) {
 }
 
 void fork_test() {
-    char buffer[256]; // Buffer for formatting strings
+    char buffer[512]; // Buffer for formatting strings
     int pid = sys_get_pid();
     
     // 打印初始信息
@@ -195,10 +195,10 @@ void fork_test() {
             print_str(", sp: ");
             hex_to_str(cur_sp, buffer);
             print_str(buffer);
-            print_str(", child_pid: ");
-            int_to_str(ret, buffer);
-            print_str(buffer);
-            print_str("\r\n");
+            // print_str(", child_pid: ");
+            // int_to_str(ret, buffer);
+            // print_str(buffer);
+            // print_str("\r\n");
 
         } else { // Second child process
             while (cnt < 5) {

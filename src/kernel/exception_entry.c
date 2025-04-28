@@ -31,9 +31,9 @@ void sync_lower_el_64_entry(uint64_t parent_sp)
     uint64_t esr;
     asm volatile("mrs %0, esr_el1" : "=r"(esr));     // 讀取 ESR_EL1
     unsigned int ec = (esr >> 26) & 0x3f;           // 取得 Exception Class
-    uart_send_string("\r\nESR_EL1: 0x");
-    uart_send_hex(esr);
-    uart_send_string("\r\n");
+    // uart_send_string("\r\nESR_EL1: 0x");
+    // uart_send_hex(esr);
+    // uart_send_string("\r\n");
     if (ec == 0b010101) { // 判斷是不是 SVC
         handle_syscall(parent_sp);
     }
@@ -92,22 +92,23 @@ void display_timer_info(void *arg)
     uart_send_int(seconds);
     uart_send_string(" seconds\r\n");
 }
-void lower_el_irq_entry(void)
+void lower_el_irq_entry(uint64_t parent_sp)
 {
     if (is_core_timer_irq()) // 檢查計時器中斷位
     {
+        user_thread_schedule();
         // 創建定時器顯示任務數據
         timer_display_data_t *data = (timer_display_data_t *)simple_alloc(sizeof(timer_display_data_t));
+
 
         // 獲取當前計數和頻率
         asm volatile("mrs %0, cntpct_el0" : "=r"(data->count));
         asm volatile("mrs %0, cntfrq_el0" : "=r"(data->freq));
-
         // 將任務加入佇列（優先級1）
         enqueue_task(&global_task_queue, display_timer_info, data, 1);
 
-        // 設置下一個2秒的超時
-        unsigned long next_timeout = 2 * data->freq;
+        // 設置下一個計時器
+        unsigned long next_timeout = (data->freq>>5) * data->freq;
         asm volatile("msr cntp_tval_el0, %0" ::"r"(next_timeout));
         asm volatile("mov x0, #1");
         asm volatile("msr cntp_ctl_el0, x0");

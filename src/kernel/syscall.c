@@ -12,9 +12,9 @@ void handle_syscall(uint64_t parent_sp) {
     // Get system call arguments from registers
     trap_frame_t *frame = (trap_frame_t *)parent_sp;
     uint64_t syscall_number = frame->x8; // 直接读取 x8 的值
-    uart_send_string("syscall_number: ");
-    uart_send_hex(syscall_number);
-    uart_send_string("\r\n");
+    // uart_send_string("syscall_number: ");
+    // uart_send_hex(syscall_number);
+    // uart_send_string("\r\n");
     uint64_t arg0 = frame->x0;
     uint64_t arg1 = frame->x1;
     uint64_t arg2 = frame->x2;
@@ -63,19 +63,46 @@ void handle_syscall(uint64_t parent_sp) {
 
 // System call implementations
 int sys_getpid() {
-    thread_t* current = get_current_thread();
+    thread_t* current = get_current();
     return current ? current->id : -1;
 }
-
+// static int user_buffer_index=0;
+static int buffer_size=0;
 size_t sys_uart_read(char* buf, size_t size) {
+    // uart_send_string("sys_uart_read\r\n");
+    // uart_send_string("buf address: ");
+    // uart_send_hex(buf);
+    // uart_send_string("\r\n");
+    // uart_send_string("size: ");
+    // uart_send_int(size);
+    // uart_send_string("\r\n");
+    // uart_send_string("read index: ");
+    // uart_send_int(user_buffer_index);
+    // uart_send_string("\r\n");
+    // buf[user_buffer_index] = uart_recv();
+    // uart_send(buf[user_buffer_index]);
+    // uart_send_string("\r\n");
     for (size_t i = 0; i < size; i++) {
         buf[i] = uart_recv();
         if (buf[i] == '\r' || buf[i] == '\n') {
-            buf[i] = '\0';
-            return i;
+            //buf[i] = '\0';
+        }else{
+            buffer_size++;
         }
     }
-    buf[size - 1] = '\0';
+    // if (buf[user_buffer_index] == '\r' || buf[user_buffer_index] == '\n') {
+    //     buf[user_buffer_index] = '\0';
+        
+    //     user_buffer_index=0;
+    //     uart_send_string("read result\r\n");
+    //     uart_send_string(buf);
+    //     uart_send_string("\r\n");
+    //     // return i;
+    // }
+    // user_buffer_index++;
+    // uart_send_string("buffer_size: ");
+    // uart_send_int(buffer_size);
+    // uart_send_string("\r\n");
     return size;
 }
 
@@ -87,8 +114,12 @@ size_t sys_uart_write(const char* buf, size_t size) {
     // uart_send_string("size: ");
     // uart_send_int(size);
     // uart_send_string("\r\n");
-    uart_send_string(buf);
+    // uart_send_string(buf);
     // uart_send_string("\r\n");
+    for (size_t i = 0; i < size && buf[i] != '\0'; i++) {
+        uart_send(buf[i]);
+    }
+    
     return size;
 }
 
@@ -109,7 +140,12 @@ int sys_exec(const char* name, char* const argv[],trap_frame_t *frame) {
     frame->sp_el0=execute_thread->trap_frame.sp_el0;
     frame->spsr_el1=execute_thread->trap_frame.spsr_el1;
     frame->tpidr_el1=execute_thread;
-    
+    uart_send_string("execute_thread: ");
+    uart_send_hex(execute_thread);
+    uart_send_string("\r\n");
+    uart_send_string("execute_thread->id: ");
+    uart_send_int(execute_thread->id);
+    uart_send_string("\r\n");
     return 1;
 }
  
@@ -132,7 +168,7 @@ int sys_fork(trap_frame_t *frame) {
     save_trap_frame(frame,get_current_thread());
     // 手動保存父進程的寄存器狀態
     uart_send_string("Parent Thread id: ");
-    uart_send_int(get_current_thread()->id);
+    uart_send_int(get_current()->id);
     uart_send_string("\r\n");
     uart_send_string("Child Thread id: ");
     uart_send_int(child->id);

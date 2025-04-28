@@ -139,9 +139,10 @@ sync_lower_el_64_handler:
 
 lower_el_irq_exception_handler:
     msr DAIFSet, 0xf
-    save_all                    // 保存上下文，使用之前定義的save_all宏
+    svc_save_all                    // 保存上下文，使用之前定義的save_all宏
     bl lower_el_irq_entry                // 調用C函數處理IRQ
-    load_all                    // 恢復上下文
+    bl process_task_queue
+    svc_load_all                    // 恢復上下文
     msr DAIFClr, 0xf
     eret                        // 返回中斷點
 

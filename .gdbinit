@@ -8,7 +8,8 @@ define kernel
   # b process_task_queue
   # b sync_lower_el_64_handler
   # b sync_lower_el_64_entry
-  #b print_str
+  b get_current_thread
+  b sys_exec
   # b svc_switch_to
   # b thread_create
   # b exception.S:132

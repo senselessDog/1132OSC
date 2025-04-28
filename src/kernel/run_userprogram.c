@@ -22,8 +22,7 @@ void el0_core_timer_enable(void)
 {
     // mov x0, 1
     // msr cntp_ctl_el0, x0 // enable
-    asm volatile("mov x0, #1");
-    asm volatile("msr cntp_ctl_el0, x0");
+    
 
     // mrs x0, cntfrq_el0
     // msr cntp_tval_el0, x0 // set expired time
@@ -35,6 +34,13 @@ void el0_core_timer_enable(void)
     // str w0, [x1] // unmask timer interrupt
     uint32_t *ctrl_reg = (volatile uint32_t *)CORE0_TIMER_IRQ_CTRL;
     *ctrl_reg = 2;
+    uint64_t tmp;
+    asm volatile("mrs %0, cntkctl_el1" : "=r"(tmp));
+    tmp |= 1;
+    asm volatile("msr cntkctl_el1, %0" : : "r"(tmp));
+    asm volatile("mov x0, #1");
+    asm volatile("msr cntp_ctl_el0, x0");
+    
 }
 void switch_to_el0(void *start_addr, void *stack_ptr)
 {
