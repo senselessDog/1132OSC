@@ -15,6 +15,7 @@ struct file_information
     void *filecontext;
     int filesize;
 };
+static int first_thread=1;
 #define CORE0_TIMER_IRQ_CTRL 0x40000040
 
 void el0_core_timer_enable(void)
@@ -56,7 +57,7 @@ void switch_to_el0(void *start_addr, void *stack_ptr)
     
 }
 
-void run_user(char *archive)
+void *run_user(char *archive)
 {
     char filename[1024];
     int index = 0;
@@ -107,17 +108,23 @@ void run_user(char *archive)
     // uart_send_string("Create parent thread success\r\n");
     user_stack=user_base+user_space_size;
     memcpy(user_base, program_info.filecontext, (uint32_t)program_info.filesize);
-    thread_init_user();
-    
+    //init user thread
+    if (first_thread){
+        thread_init_user();
+        
+    }
     uart_send_string("user_base: ");
     uart_send_hex(user_base);
     uart_send_string("\r\n");
     uart_send_string("user_stack: ");
     uart_send_hex(user_stack);
     uart_send_string("\r\n");
-    switch_to_el0(user_base, user_stack);
+    if (first_thread){
+        first_thread=0;
+        switch_to_el0(user_base, user_stack);
+    }
     // uart_send_string("Parent thread start\r\n");
     //asm volatile("eret\n");
     // idle();
-
+    return user_base;
 }

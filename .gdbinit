@@ -18,7 +18,7 @@ define kernel
   # b idle
   # b thread_init
   # b thread_create_save
-  b thread_exit
+  b user_thread_exit
 end
 
 define user

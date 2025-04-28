@@ -4,7 +4,9 @@
 #include "buddy_alloc.h"
 #include "strcmp.h"
 #include "syscall.h"
-
+#include "thread.h"
+#include "mailbox.h"
+extern uint32_t g_initramfs_addr;
 // System call handler function
 void handle_syscall(uint64_t parent_sp) {
     // Get system call arguments from registers
@@ -31,19 +33,19 @@ void handle_syscall(uint64_t parent_sp) {
 
             break;
         case 3: // SYS_EXEC
-            frame->x0 = sys_exec((const char*)arg0, (char* const)arg1);
+            frame->x0 = sys_exec((const char*)arg0, (char* const)arg1,frame);
             break;
         case 4: // SYS_FORK
             frame->x0 = sys_fork(frame);
             break;
         case 5: // SYS_EXIT
-            sys_exit((int)arg0);
+            sys_exit(frame);
             break;
         case 6: // SYS_MBOX_CALL
             frame->x0 = sys_mbox_call((unsigned char)arg0, (unsigned int*)arg1);
             break;
         case 7: // SYS_KILL
-            frame->x0 = sys_kill((int)arg0);
+            sys_kill(frame,(int)arg0);
             break;
         default:
             uart_send_string("Unknown system call: ");
@@ -90,15 +92,44 @@ size_t sys_uart_write(const char* buf, size_t size) {
     return size;
 }
 
-int sys_exec(const char* name, char* const argv[]) {
+int sys_exec(const char* name, char* const argv[],trap_frame_t *frame) {
     // TODO: Implement exec system call
-    return -1;
+    save_trap_frame(frame,get_current_thread());
+    //create new thread
+    thread_t *execute_thread = thread_create(name, NULL);
+    //allocate user space
+    void *user_base=run_user(g_initramfs_addr);
+    frame->x0=execute_thread->id;
+    //allocate new thread context and pass to frame
+    execute_thread->trap_frame.elr_el1=user_base;
+    execute_thread->trap_frame.sp_el0=execute_thread->fp;
+    execute_thread->trap_frame.spsr_el1=0x0;
+    execute_thread->trap_frame.tpidr_el1=execute_thread;
+    frame->elr_el1=execute_thread->trap_frame.elr_el1;
+    frame->sp_el0=execute_thread->trap_frame.sp_el0;
+    frame->spsr_el1=execute_thread->trap_frame.spsr_el1;
+    frame->tpidr_el1=execute_thread;
+    
+    return 1;
 }
-
+ 
 int sys_fork(trap_frame_t *frame) {
+    
+    
+    uart_send_string("[sys_fork]frame->elr_el1: ");
+    uart_send_hex(frame->elr_el1);
+    uart_send_string("\r\n");
+    uart_send_string("[sys_fork]frame->sp_el0: ");
+    uart_send_hex(frame->sp_el0);
+    uart_send_string("\r\n");
+    uart_send_string("[sys_fork]frame->tpidr_el1: ");
+    uart_send_hex(frame->tpidr_el1);
+    uart_send_string("\r\n");
     // 創建新進程 (copy elr_el1 and regs(x19~x31))
     thread_t *child = thread_create(NULL, frame);
-    
+    //for parent thread
+    frame->x0=child->id; 
+    save_trap_frame(frame,get_current_thread());
     // 手動保存父進程的寄存器狀態
     uart_send_string("Parent Thread id: ");
     uart_send_int(get_current_thread()->id);
@@ -108,16 +139,16 @@ int sys_fork(trap_frame_t *frame) {
     uart_send_string("\r\n");
     
     //copy stack space
-    uart_send_string("[system call] frame->sp_el0: ");
-    uart_send_hex(frame->sp_el0);
-    uart_send_string("\r\n");
-    uart_send_string("[system call] frame->x29: ");
-    uart_send_hex(frame->x29);
-    uart_send_string("\r\n");
-    uint32_t parent_thread_stack_size=frame->x29-frame->sp_el0;
-    uart_send_string("Parent thread_stack_size ");
-    uart_send_int(parent_thread_stack_size);
-    uart_send_string("\r\n");
+    // uart_send_string("[system call] frame->sp_el0: ");
+    // uart_send_hex(frame->sp_el0);
+    // uart_send_string("\r\n");
+    // uart_send_string("[system call] frame->x29: ");
+    // uart_send_hex(frame->x29);
+    // uart_send_string("\r\n");
+    // uint32_t parent_thread_stack_size=frame->x29-frame->sp_el0;
+    // uart_send_string("Parent thread_stack_size ");
+    // uart_send_int(parent_thread_stack_size);
+    // uart_send_string("\r\n");
     // extern uint32_t user_space_size;
     // void * child_base=dynamic_malloc(user_space_size);
     // memcpy(child_base, (void *)frame->sp_el0, parent_thread_stack_size);
@@ -134,9 +165,11 @@ int sys_fork(trap_frame_t *frame) {
     uint64_t parent_sp_el0=frame->sp_el0;
     // memcpy((void *)child->thread_context.fp-THREAD_STACK_SIZE, (void *)frame->x29-THREAD_STACK_SIZE, THREAD_STACK_SIZE);
     // frame->sp_el0=child->thread_context.fp-(frame->x29-frame->sp_el0);
+    frame->tpidr_el1=child;
     fork_schedule(frame);
     uint64_t sp_el0;
-    asm volatile("mrs %0, sp_el0" : "=r"(sp_el0));
+    //asm volatile("mrs %0, sp_el0" : "=r"(sp_el0));
+    sp_el0=frame->sp_el0;
     if (sp_el0==parent_sp_el0){ //parent thread
         return child->id;
     }
@@ -145,16 +178,73 @@ int sys_fork(trap_frame_t *frame) {
     }
 }
 
-void sys_exit(int status) {
-    thread_exit();
+void sys_exit(trap_frame_t *frame) {
+    user_thread_exit(frame,NULL);
+    uart_send_string("[sys_exit]frame->elr_el1: ");
+    uart_send_hex(frame->elr_el1);
+    uart_send_string("\r\n");
+    uart_send_string("[sys_exit]frame->sp_el0: ");
+    uart_send_hex(frame->sp_el0);
+    uart_send_string("\r\n");
+    uart_send_string("[sys_exit]frame->tpidr_el1: ");
+    uart_send_hex(frame->tpidr_el1);
+    uart_send_string("\r\n");
+    return;
 }
 
-int sys_mbox_call(unsigned char ch, unsigned int* mbox) {
+int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
     // TODO: Implement mailbox system call
-    return -1;
+    extern int mailbox_call_lowlevel(unsigned char ch, volatile unsigned int *kernel_mbox);
+
+    // 1. 驗證參數 (通道號)
+    if (ch > 15) {
+        uart_send_string("KERN: Invalid mailbox channel.\r\n");
+        return -1; // 回傳錯誤碼給使用者
+    }
+
+    // 2. 讀取使用者空間的 buffer 大小 (假設 user_mbox 指標是有效的)
+    //    !!! 警告：沒有 MMU，直接讀取使用者指標有風險 !!!
+    unsigned int buffer_size;
+    // 這裡需要一種安全的方式讀取，或者暫時直接讀取
+    //memcpy(&buffer_size, user_mbox, sizeof(unsigned int)); // 稍微安全一點點
+    buffer_size=user_mbox[0];
+
+    // 基本的大小檢查
+    if (buffer_size < 8 || buffer_size > 1024*4 ) { // 最小 2 個 uint, 合理最大值
+        uart_send_string("KERN: Invalid mailbox buffer size.\r\n");
+        return -1;
+    }
+    // 確保大小是 4 的倍數
+     if (buffer_size % 4 != 0) {
+         uart_send_string("KERN: Mailbox buffer size not multiple of 4.\r\n");
+         return -1;
+     }
+
+
+    // 3. 分配 16 位元組對齊的核心緩衝區
+    void *kernel_mbox =dynamic_malloc(buffer_size);
+
+    // 4. 複製請求 (User -> Kernel)
+    //    !!! 警告：沒有 MMU，直接 memcpy 有風險 !!!
+    memcpy((void *)kernel_mbox, user_mbox, buffer_size);
+
+    // 5. 呼叫底層 Mailbox 函數 (使用核心緩衝區)
+    int result = mailbox_call_lowlevel(ch, kernel_mbox);
+
+    // 6. 複製結果 (Kernel -> User) - 即使 lowlevel 失敗，也可能需要複製錯誤碼回去
+    //    !!! 警告：沒有 MMU，直接 memcpy 有風險 !!!
+    //    通常 mailbox[1] 會被 GPU 更新為 RESPONSE_SUCCESS 或 RESPONSE_ERROR
+    memcpy(user_mbox, (void *)kernel_mbox, buffer_size);
+
+    // 7. 釋放核心緩衝區
+    dynamic_free((void*)kernel_mbox);
+
+    // 8. 回傳結果 (lowlevel 的回傳值, 0 代表成功)
+    return result;
 }
 
-int sys_kill(int pid) {
+int sys_kill(trap_frame_t *frame,int pid) {
+    user_thread_exit(frame,NULL);
     // TODO: Implement kill system call
-    return -1;
+    return 0;
 } 

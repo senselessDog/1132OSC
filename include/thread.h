@@ -31,6 +31,7 @@ typedef struct {
     thread_context_block_t thread_context;
     struct thread *next;
     void* fp;
+    trap_frame_t trap_frame;
 } thread_t;
 
 // --- System Call Numbers ---
@@ -48,6 +49,9 @@ typedef struct {
 
 // Thread management functions
 void thread_init(void);
+void thread_init_user(void);
+void add_to_run_queue(thread_t *thd);
+void remove_from_run_queue(thread_t *thd);
 thread_t *thread_create(void (*entry_point)(void),trap_frame_t *frame);
 void thread_exit(void);
 void schedule(void);
@@ -56,6 +60,8 @@ thread_t *get_current_thread(void);
 void idle(void);
 void kill_zombie_thread(void);
 void thread_test(void);
+void save_trap_frame(trap_frame_t *frame, thread_t *thread);
+void restore_trap_frame(trap_frame_t *frame, thread_t *thread);
 
 // // --- External assembly functions ---
 // extern void switch_to(kcontext_t *prev_ctx, kcontext_t *next_ctx);

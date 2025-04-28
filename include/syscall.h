@@ -3,7 +3,7 @@
 
 #include <stddef.h> 
 typedef struct {
-    uint64_t x0, x1;   // 16 * 0
+    int64_t x0, x1;   // 16 * 0
     uint64_t x2, x3;   // 16 * 1
     uint64_t x4, x5;   // 16 * 2
     uint64_t x6, x7;   // 16 * 3
@@ -24,6 +24,10 @@ typedef struct {
     //     uint64_t _pad[2]; // 强制占用 16 字节
     // };
     uint64_t spsr_el1, elr_el1; // 16 * 16
+    union {
+        uint64_t tpidr_el1;
+        uint64_t _pad[2];
+    };
 } trap_frame_t;
 // System call handler function
 void handle_syscall(uint64_t syscall_number);
@@ -32,10 +36,10 @@ void handle_syscall(uint64_t syscall_number);
 int sys_getpid();
 size_t sys_uart_read(char buf[], size_t size);
 size_t sys_uart_write(const char buf[], size_t size);
-int sys_exec(const char* name, char* const argv[]);
+int sys_exec(const char* name, char* const argv[],trap_frame_t *frame);
 int sys_fork();
-void sys_exit(int status);
+void sys_exit(trap_frame_t *frame);
 int sys_mbox_call(unsigned char ch, unsigned int* mbox);
-int sys_kill(int pid);
+int sys_kill(trap_frame_t *frame,int pid);
 
 #endif // SYSCALL_H 

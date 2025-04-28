@@ -241,5 +241,6 @@ void fork_test() {
         int_to_str(ret, buffer);
         print_str(buffer);
         print_str("\r\n");
+        sys_exit(0);
     }
 }
