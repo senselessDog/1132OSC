@@ -56,7 +56,7 @@ thread_t *thread_create(void (*entry_point)(void),trap_frame_t *frame);
 void thread_exit(void);
 void schedule(void);
 void thread_create_save(uint64_t thread_sp, uint64_t thread_fp, uint64_t thread_lr);
-thread_t *get_current_thread(void);
+// thread_t *get_current_thread(void);
 void idle(void);
 void kill_zombie_thread(void);
 void thread_test(void);

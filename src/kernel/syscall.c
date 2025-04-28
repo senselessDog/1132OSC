@@ -12,9 +12,9 @@ void handle_syscall(uint64_t parent_sp) {
     // Get system call arguments from registers
     trap_frame_t *frame = (trap_frame_t *)parent_sp;
     uint64_t syscall_number = frame->x8; // 直接读取 x8 的值
-    // uart_send_string("syscall_number: ");
-    // uart_send_hex(syscall_number);
-    // uart_send_string("\r\n");
+    uart_send_string("syscall_number: ");
+    uart_send_hex(syscall_number);
+    uart_send_string("\r\n");
     uint64_t arg0 = frame->x0;
     uint64_t arg1 = frame->x1;
     uint64_t arg2 = frame->x2;
@@ -67,7 +67,7 @@ int sys_getpid() {
     return current ? current->id : -1;
 }
 // static int user_buffer_index=0;
-static int buffer_size=0;
+// static int buffer_size=0;
 size_t sys_uart_read(char* buf, size_t size) {
     // uart_send_string("sys_uart_read\r\n");
     // uart_send_string("buf address: ");
@@ -83,11 +83,10 @@ size_t sys_uart_read(char* buf, size_t size) {
     // uart_send(buf[user_buffer_index]);
     // uart_send_string("\r\n");
     for (size_t i = 0; i < size; i++) {
-        buf[i] = uart_recv();
-        if (buf[i] == '\r' || buf[i] == '\n') {
-            //buf[i] = '\0';
-        }else{
-            buffer_size++;
+        char c=0;
+        if(uart_async_recv(&c)){
+            buf[i]=c;
+            return size;
         }
     }
     // if (buf[user_buffer_index] == '\r' || buf[user_buffer_index] == '\n') {
@@ -103,7 +102,7 @@ size_t sys_uart_read(char* buf, size_t size) {
     // uart_send_string("buffer_size: ");
     // uart_send_int(buffer_size);
     // uart_send_string("\r\n");
-    return size;
+    return 0;
 }
 
 size_t sys_uart_write(const char* buf, size_t size) {
@@ -125,7 +124,7 @@ size_t sys_uart_write(const char* buf, size_t size) {
 
 int sys_exec(const char* name, char* const argv[],trap_frame_t *frame) {
     // TODO: Implement exec system call
-    save_trap_frame(frame,get_current_thread());
+    save_trap_frame(frame,get_current());
     //create new thread
     thread_t *execute_thread = thread_create(name, NULL);
     //allocate user space
@@ -165,10 +164,11 @@ int sys_fork(trap_frame_t *frame) {
     thread_t *child = thread_create(NULL, frame);
     //for parent thread
     frame->x0=child->id; 
-    save_trap_frame(frame,get_current_thread());
+    save_trap_frame(frame,get_current());
     // 手動保存父進程的寄存器狀態
     uart_send_string("Parent Thread id: ");
-    uart_send_int(get_current()->id);
+    thread_t *parent = get_current();
+    uart_send_int(parent->id);
     uart_send_string("\r\n");
     uart_send_string("Child Thread id: ");
     uart_send_int(child->id);

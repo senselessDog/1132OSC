@@ -28,18 +28,21 @@ void add_to_run_queue(thread_t *thd) {
 void remove_from_run_queue(thread_t *thd) {
     if (!run_queue || !thd) return;
 
-    thread_t *current = run_queue;
+    thread_t *delete_thread = get_current();
     thread_t *prev = NULL;
 
+    thread_t *current = delete_thread;
     // Find the thread and its predecessor
-    do {
-        if (current == thd) break;
-        prev = current;
+    while (current != run_queue){
+        if (current->next == thd){
+            prev = current;
+            break;
+        }
         current = current->next;
-    } while (current != run_queue);
+    }
 
     // If thread not found or it's the only one
-    if (current != thd) return; // Not found
+    if (delete_thread != thd) return; // Not found
 
     if (thd->next == thd) { // It's the only thread
         run_queue = NULL;
@@ -50,7 +53,7 @@ void remove_from_run_queue(thread_t *thd) {
         // If removing the head node referenced by run_queue
         if (run_queue == thd) {
             // Find the new 'last' element if run_queue points to last, or just use prev->next if run_queue points to head
-             if (prev) run_queue = prev; // If run_queue points to last
+             if (prev && prev->state != THREAD_DEAD) run_queue = prev; // If run_queue points to last
              else run_queue = thd->next; // If run_queue points to head and we remove it
         }
     }
@@ -184,6 +187,11 @@ void schedule(void) {
         }
         else if (next == current_thread && next->state == THREAD_RUNNING) {
             break;
+        }
+        else if (next == current_thread && next->state == THREAD_DEAD) {
+            uart_send_string("[schedule] current thread is dead, use idle thread\r\n");
+            idle();
+            return;
         }
         next = next->next;
     }
@@ -381,9 +389,6 @@ void fork_schedule(uint64_t parent_sp) {
     // uart_send_string("\r\n");
 
 }
-thread_t *get_current_thread(void) {
-    return current_thread;
-}
 
 void idle(void) {
     while (1) {
@@ -414,7 +419,7 @@ void kill_zombie_thread(void) {
 }
 void thread_test() {
     for(int i = 0; i < 10; ++i) {
-        thread_t *current = get_current_thread();
+        thread_t *current = get_current();
         uart_send_string("Thread id: ");
         uart_send_int(current->id);
         uart_send_string(" ");

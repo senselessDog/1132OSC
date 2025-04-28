@@ -195,6 +195,7 @@ void fork_test() {
             print_str(", sp: ");
             hex_to_str(cur_sp, buffer);
             print_str(buffer);
+            print_str("\r\n");
             // print_str(", child_pid: ");
             // int_to_str(ret, buffer);
             // print_str(buffer);

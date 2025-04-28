@@ -28,6 +28,19 @@ uint32_t is_uart_interrupt()
 }
 void sync_lower_el_64_entry(uint64_t parent_sp)
 {
+    // uint64_t tmp;
+    // asm volatile("mrs %0,cntkctl_el1" :  "=r"(tmp));
+    // uart_send_string("[sync_lower_el_64_entry] cntkctl_el1: ");
+    // uart_send_hex(tmp);
+    // uart_send_string("\r\n");
+    // asm volatile("mrs %0, cntp_ctl_el0" :  "=r"(tmp));
+    // uart_send_string("[sync_lower_el_64_entry] cntp_ctl_el0: ");
+    // uart_send_hex(tmp);
+    // uart_send_string("\r\n");
+    // uart_send_string("[sync_lower_el_64_entry] cntp_tval_el0: ");
+    // asm volatile("mrs %0, cntp_tval_el0" :  "=r"(tmp));
+    // uart_send_hex(tmp);
+    // uart_send_string("\r\n");
     uint64_t esr;
     asm volatile("mrs %0, esr_el1" : "=r"(esr));     // 讀取 ESR_EL1
     unsigned int ec = (esr >> 26) & 0x3f;           // 取得 Exception Class
@@ -94,6 +107,7 @@ void display_timer_info(void *arg)
 }
 void lower_el_irq_entry(uint64_t parent_sp)
 {
+    uart_send_string("[lower_el_irq_entry] \r\n");
     if (is_core_timer_irq()) // 檢查計時器中斷位
     {
         user_thread_schedule();
@@ -108,7 +122,7 @@ void lower_el_irq_entry(uint64_t parent_sp)
         enqueue_task(&global_task_queue, display_timer_info, data, 1);
 
         // 設置下一個計時器
-        unsigned long next_timeout = (data->freq>>5) * data->freq;
+        unsigned long next_timeout = 1*data->freq;
         asm volatile("msr cntp_tval_el0, %0" ::"r"(next_timeout));
         asm volatile("mov x0, #1");
         asm volatile("msr cntp_ctl_el0, x0");

@@ -4,12 +4,17 @@ define kernel
   # b default_exception_handler
   # b lower_el_irq_exception_handler
   # b switch_to_el0
-  # b handle_syscall
+  b handle_syscall
   # b process_task_queue
   # b sync_lower_el_64_handler
   # b sync_lower_el_64_entry
-  b get_current_thread
+  b get_current
   b sys_exec
+  b user_thread_schedule
+  b el0_core_timer_enable
+  b lower_el_irq_entry
+  b lower_el_irq_exception_handler
+  b el1_irq_exception_handler
   # b svc_switch_to
   # b thread_create
   # b exception.S:132

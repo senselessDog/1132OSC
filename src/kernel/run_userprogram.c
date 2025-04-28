@@ -45,7 +45,7 @@ void el0_core_timer_enable(void)
 void switch_to_el0(void *start_addr, void *stack_ptr)
 {
     // perpare for this function
-    //el0_core_timer_enable();
+    el0_core_timer_enable();
     uart_send_string("switch_to_el0\r\n");
     uart_send_string("start_addr: ");
     uart_send_hex(start_addr);

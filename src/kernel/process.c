@@ -27,7 +27,7 @@ void user_thread_exit(trap_frame_t *frame,int thread_id) {
         delete_thread->state = THREAD_DEAD;
         remove_from_run_queue(delete_thread); // Remove from scheduling
         user_thread_schedule(frame); // Switch to another thread
-        // Continue to load all
+        delete_thread->state = THREAD_DEAD;// Continue to load all
     }
 }
 
@@ -35,7 +35,10 @@ void user_thread_schedule(trap_frame_t *frame) {
     if (!run_queue) {
         shell();
     }
-    thread_t *current_thread = get_current_thread();
+    thread_t *current_thread = get_current();
+    uart_send_string("[user_thread_schedule] current_thread: ");
+    uart_send_int(current_thread->id);
+    uart_send_string("\r\n");
     // Find next ready thread
     thread_t *next = current_thread->next;
     while (next) {
@@ -46,6 +49,7 @@ void user_thread_schedule(trap_frame_t *frame) {
             break;
         }
         else if (next == run_queue && next->state == THREAD_DEAD) {
+            uart_send_string("[user_thread_schedule] run_queue is dead, use idle thread\r\n");
             user_idle();
             break;
         }
