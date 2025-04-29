@@ -199,8 +199,8 @@ void mark_allocated(int order, int start_idx) {
         // uart_send_string("\r\n");
     } else {
         // Otherwise, find the block in the list and remove it
-        buddy_block_list_t* prev = &buddy_system->buddy_list[order][start_idx].prev;
-        buddy_block_list_t* next = &buddy_system->buddy_list[order][start_idx].next;
+        buddy_block_list_t* prev = buddy_system->buddy_list[order][start_idx].prev;
+        buddy_block_list_t* next = buddy_system->buddy_list[order][start_idx].next;
         prev->next = buddy_system->buddy_list[order][start_idx].next;
         if (next != NULL) {
             next->prev = buddy_system->buddy_list[order][start_idx].prev;

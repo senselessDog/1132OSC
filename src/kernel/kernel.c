@@ -276,7 +276,7 @@ void kernel_main(void *dtb_addr)
     // Initialize memory allocator
     buddy_init();
     init_dynamic_allocator();
-    //thread_init();
+    // thread_init();
     // // create multiple threads
     // for(int i = 0; i < 3; i++) {
     //     thread_create(thread_test,NULL);

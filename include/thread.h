@@ -54,7 +54,7 @@ void add_to_run_queue(thread_t *thd);
 void remove_from_run_queue(thread_t *thd);
 thread_t *thread_create(void (*entry_point)(void),trap_frame_t *frame);
 void thread_exit(void);
-void schedule(void);
+void schedule(int is_exit);
 void thread_create_save(uint64_t thread_sp, uint64_t thread_fp, uint64_t thread_lr);
 // thread_t *get_current_thread(void);
 void idle(void);

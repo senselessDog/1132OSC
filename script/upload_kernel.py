@@ -21,4 +21,4 @@ def send_kernel(kernel_path, serial_port):
     # ser.close()
 
 if __name__ == "__main__":
-    send_kernel("/home/kuan/lab/lab5/script/kernel8.img", "/dev/pts/1") # Replace /dev/pts/X with the actual path
+    send_kernel("/home/kuan/lab/lab5/script/kernel8.img", "/dev/ttyUSB0") # Replace /dev/pts/X with the actual path

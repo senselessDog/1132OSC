@@ -165,7 +165,7 @@ void thread_exit(void) {
         uart_send_string(" exiting.\r\n");
         delete_thread->state = THREAD_DEAD;
         remove_from_run_queue(delete_thread); // Remove from scheduling
-        schedule(); // Switch to another thread
+        schedule(1); // Switch to another thread
         // Should not return here
         uart_send_string("Error: Exited thread returned!\r\n");
         while(1);
@@ -174,7 +174,7 @@ void thread_exit(void) {
 
 
 
-void schedule(void) {
+void schedule(int is_exit) {
     if (!run_queue) {
         return;
     }
@@ -205,7 +205,11 @@ void schedule(void) {
 
     // Switch context
     thread_t *prev = current_thread;
-    prev->state = THREAD_READY;
+    if (is_exit) {
+        prev->state = THREAD_DEAD;
+    } else {
+        prev->state = THREAD_READY;
+    }
     current_thread = next;
     current_thread->state = THREAD_RUNNING;
     while(prev->id==current_thread->id){
@@ -224,9 +228,9 @@ void schedule(void) {
     uart_send_string("current sp: ");
     uart_send_hex(current_thread->thread_context.sp);
     uart_send_string("\r\n");
-    uart_send_string("prev sp: ");
-    uart_send_hex(prev->thread_context.sp);
-    uart_send_string("\r\n");
+    // uart_send_string("prev sp: ");
+    // uart_send_hex(prev->thread_context.sp);
+    // uart_send_string("\r\n");
     asm volatile("mov %0, sp" : "=r"(prev->thread_context.sp));
     asm volatile("mov %0, fp" : "=r"(prev->thread_context.fp));
     asm volatile("mov %0, lr" : "=r"(prev->thread_context.lr));
@@ -393,7 +397,7 @@ void fork_schedule(uint64_t parent_sp) {
 void idle(void) {
     while (1) {
         kill_zombie_thread();
-        schedule();
+        schedule(0);
     }
 }
 void kill_zombie_thread(void) {
@@ -436,7 +440,7 @@ void thread_test() {
             asm volatile("nop");
         }
         
-        schedule();
+        schedule(0);
     }
     thread_exit();
 }
