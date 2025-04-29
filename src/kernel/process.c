@@ -3,10 +3,10 @@
 #include "buddy_alloc.h"
 #include "syscall.h"
 extern thread_t *run_queue;
-void user_idle(void) {
+void user_idle(trap_frame_t *frame) {
     while (1) {
         kill_zombie_thread();
-        user_thread_schedule();
+        user_thread_schedule(frame);
     }
 }
 void user_thread_exit(trap_frame_t *frame,int thread_id) {
@@ -36,9 +36,9 @@ void user_thread_schedule(trap_frame_t *frame) {
         shell();
     }
     thread_t *current_thread = get_current();
-    uart_send_string("[user_thread_schedule] current_thread: ");
-    uart_send_int(current_thread->id);
-    uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule] current_thread: ");
+    // uart_send_int(current_thread->id);
+    // uart_send_string("\r\n");
     // Find next ready thread
     thread_t *next = current_thread->next;
     while (next) {
@@ -50,7 +50,7 @@ void user_thread_schedule(trap_frame_t *frame) {
         }
         else if (next == run_queue && next->state == THREAD_DEAD) {
             uart_send_string("[user_thread_schedule] run_queue is dead, use idle thread\r\n");
-            user_idle();
+            user_idle(frame);
             break;
         }
         next = next->next;
@@ -79,19 +79,19 @@ void user_thread_schedule(trap_frame_t *frame) {
     // prev->sp = prev_thread_sp-7*16;
     //Don't habe to deal with current thread sp
     //current thread sp is already updated in switch.S
-    uart_send_string("[user_thread_schedule] switch to thread: ");
-    uart_send_int(current_thread->id);
-    uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule] switch to thread: ");
+    // uart_send_int(current_thread->id);
+    // uart_send_string("\r\n");
     
     save_trap_frame(frame,prev);
     restore_trap_frame(frame,current_thread);
-    uart_send_string("[user_thread_schedule]frame->elr_el1: ");
-    uart_send_hex(frame->elr_el1);
-    uart_send_string("\r\n");
-    uart_send_string("[user_thread_schedule]frame->sp_el0: ");
-    uart_send_hex(frame->sp_el0);
-    uart_send_string("\r\n");
-    uart_send_string("[user_thread_schedule]frame->tpidr_el1: ");
-    uart_send_hex(frame->tpidr_el1);
-    uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule]frame->elr_el1: ");
+    // uart_send_hex(frame->elr_el1);
+    // uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule]frame->sp_el0: ");
+    // uart_send_hex(frame->sp_el0);
+    // uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule]frame->tpidr_el1: ");
+    // uart_send_hex(frame->tpidr_el1);
+    // uart_send_string("\r\n");
 }

@@ -29,7 +29,15 @@ typedef struct {
         uint64_t _pad[2];
     };
 } trap_frame_t;
+
+typedef struct {
+    uint64_t syscall_number;
+    uint64_t args[8];
+    trap_frame_t *frame_ptr;
+} syscall_task_data_t;
+
 // System call handler function
+void execute_syscall_task(void *data); // 宣告回呼函數
 void handle_syscall(uint64_t syscall_number);
 
 // System call implementations

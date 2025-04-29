@@ -111,11 +111,11 @@ default_exception_handler:
 
 el1_irq_exception_handler:
     //msr DAIFSet, 0xf
-    save_all                    // 保存上下文，使用之前定義的save_all宏
+    svc_save_all                    // 保存上下文，使用之前定義的save_all宏
     bl el1_irq_entry        // Modified to accept SPSR parameter
     // 处理任务队列中的任务
     bl process_task_queue
-    load_all                    // 恢復上下文
+    svc_load_all                    // 恢復上下文
     //msr DAIFClr, 0xf
     eret                        // 返回中斷點
 

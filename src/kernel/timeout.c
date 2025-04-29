@@ -2,6 +2,8 @@
 #include "task_queue.h"
 #include "uart.h"
 #include "gpu_interrupt.h"
+#include "thread.h"
+#include "syscall.h"
 void process_timer_tasks(void *arg);
 #ifndef NULL
 #define NULL ((void *)0)
@@ -20,7 +22,12 @@ typedef struct timer
     uint64_t expire_time;         // 過期時間
     struct timer *next;           // 下一個計時器
 } timer_t;
-
+//for user program(lab5)
+typedef struct
+{
+    uint64_t count;
+    uint64_t freq;
+} timer_display_data_t;
 // 全局計時器隊列
 timer_t *timer_queue = NULL;
 
@@ -150,17 +157,17 @@ void timer_interrupt_handler()
         }
     }
     // 如果沒有更多計時器，停用硬體計時器
-    if (timer_queue == NULL)
-    {
-        asm volatile("msr cntp_ctl_el0, %0" ::"r"(0)); // 停用計時器
-    }
+    // if (timer_queue == NULL)
+    // {
+    //     asm volatile("msr cntp_ctl_el0, %0" ::"r"(0)); // 停用計時器
+    // }
 }
 
 // 定時器任務處理函數
 void process_timer_tasks(void *arg)
 {
     // 啟用中斷以允許嵌套
-    enable_interrupts();
+    // enable_interrupts();
 
     uint64_t current_time;
 
@@ -199,4 +206,32 @@ void process_timer_tasks(void *arg)
 
     // 關閉中斷
     disable_interrupts();
+}
+//lab5
+void user_timeout_handler(trap_frame_t *frame)
+{
+    uint32_t irq_id;
+    // asm volatile("mrc p15, 0, %0, c12, c12, 0" : "=r"(irq_id)); // 讀 GICC_IAR
+    // 處理計時器中斷
+    
+    
+    // *CORE0_TIMER_IRQ_CTRL |= (1 << 1);  // 寫1清除中斷
+    // uart_send_string("[el1_irq_entry] \r\n");
+    user_thread_schedule(frame);
+    // 創建定時器顯示任務數據
+    timer_display_data_t *data = (timer_display_data_t *)simple_alloc(sizeof(timer_display_data_t));
+
+
+    // 獲取當前計數和頻率
+    asm volatile("mrs %0, cntpct_el0" : "=r"(data->count));
+    asm volatile("mrs %0, cntfrq_el0" : "=r"(data->freq));
+    // 將任務加入佇列（優先級1）
+    // enqueue_task(&global_task_queue, display_timer_info, data, 1);
+
+    // 設置下一個計時器
+    unsigned long next_timeout = data->freq>>5;
+    asm volatile("msr cntp_tval_el0, %0" ::"r"(next_timeout));
+    asm volatile("mov x0, #1");
+    asm volatile("msr cntp_ctl_el0, x0");
+    // asm volatile("mcr p15, 0, %0, c12, c12, 1" :: "r"(irq_id)); // 寫 GICC_EOIR
 }

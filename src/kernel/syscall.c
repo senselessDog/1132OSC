@@ -6,59 +6,83 @@
 #include "syscall.h"
 #include "thread.h"
 #include "mailbox.h"
+#include "task_queue.h"
 extern uint32_t g_initramfs_addr;
 // System call handler function
-void handle_syscall(uint64_t parent_sp) {
-    // Get system call arguments from registers
-    trap_frame_t *frame = (trap_frame_t *)parent_sp;
-    uint64_t syscall_number = frame->x8; // 直接读取 x8 的值
-    uart_send_string("syscall_number: ");
-    uart_send_hex(syscall_number);
-    uart_send_string("\r\n");
+// 任務回呼函數的原型
+void execute_syscall_task(void *data);
+
+// System call handler function
+// kernel_sp 指向 Trap Frame
+void handle_syscall(uint64_t kernel_sp) {
+    trap_frame_t *frame = (trap_frame_t *)kernel_sp;
+    uint64_t syscall_number = frame->x8; // 從 x8 讀取 syscall 號
     uint64_t arg0 = frame->x0;
     uint64_t arg1 = frame->x1;
     uint64_t arg2 = frame->x2;
-    uint64_t arg3 = frame->x3;
+    // ... 可以讀取更多參數 ...
 
-    // Handle different system calls
+    // uart_send_string("[Syscall Entry] SYSCALL_NUM="); uart_send_hex(syscall_number); uart_send_string("\r\n");
+
     switch (syscall_number) {
-        case 0: // SYS_GETPID
+        // --- 延遲處理的系統呼叫 (放入 Task Queue) ---
+        case SYS_UART_READ:
+        case SYS_UART_WRITE:
+        {
+            syscall_task_data_t *task_data = (syscall_task_data_t *)dynamic_malloc(sizeof(syscall_task_data_t));
+            if (!task_data) {
+                frame->x0 = -1;
+                return;
+            }
+            task_data->syscall_number = syscall_number;
+            task_data->args[0] = arg0;
+            task_data->args[1] = arg1;
+            // ... copy more args if needed ...
+            task_data->frame_ptr = frame;
+
+            // 設定優先級
+            int priority = 0; // UART_WRITE 預設優先級
+            if (syscall_number == SYS_UART_READ) {
+                priority = -1; // UART_READ 低優先級
+            }
+
+            enqueue_task(&global_task_queue, execute_syscall_task, task_data, priority);
+            // 結果由 execute_syscall_task 寫回 frame->x0
+            break;
+        }
+
+        // --- 直接處理的系統呼叫 ---
+        case SYS_GETPID:
             frame->x0 = sys_getpid();
             break;
-        case 1: // SYS_UART_READ
-            frame->x0 = sys_uart_read((char*)arg0,(size_t)arg1);
-            break;
-        case 2: // SYS_UART_WRITE
-            frame->x0 = sys_uart_write((const char*)arg0, (size_t)arg1);
-
-            break;
-        case 3: // SYS_EXEC
-            frame->x0 = sys_exec((const char*)arg0, (char* const)arg1,frame);
-            break;
-        case 4: // SYS_FORK
-            frame->x0 = sys_fork(frame);
-            break;
-        case 5: // SYS_EXIT
-            sys_exit(frame);
-            break;
-        case 6: // SYS_MBOX_CALL
+        case SYS_MBOX_CALL:
+            // !!! 警告：直接執行 MBOX Call 可能會因為等待 GPU 而增加中斷延遲 !!!
+            // !!! 因為它在 SVC handler (中斷屏蔽) 中執行 !!!
             frame->x0 = sys_mbox_call((unsigned char)arg0, (unsigned int*)arg1);
             break;
-        case 7: // SYS_KILL
-            sys_kill(frame,(int)arg0);
+        case SYS_FORK:
+            frame->x0 = sys_fork(frame);
             break;
+        case SYS_EXEC:
+            frame->x0 = sys_exec((const char*)arg0, (char* const*)arg1, frame);
+            // Note: Successful exec won't return here
+            break;
+        case SYS_EXIT:
+            sys_exit((int)arg0); // Does not return
+            break; // Should not be reached
+        case SYS_KILL:
+            sys_kill(frame, (int)arg0);
+            frame->x0 = 0; // Assume kill returns 0 on success?
+            break;
+
         default:
             uart_send_string("Unknown system call: ");
             uart_send_hex(syscall_number);
             uart_send_string("\r\n");
-            asm volatile("mov x0, #-1");
+            frame->x0 = -1;
             break;
     }
-    // int result;
-    // asm volatile("mov %0, x0" :"=r"(result));
-    // uart_send_string("[handle_syscall] result: ");
-    // uart_send_hex(frame->x0);
-    // uart_send_string("\r\n");
+    // C 函數返回，組合語言會接著呼叫 process_task_queue (處理延遲的 READ/WRITE)
 }
 
 // System call implementations
@@ -82,12 +106,22 @@ size_t sys_uart_read(char* buf, size_t size) {
     // buf[user_buffer_index] = uart_recv();
     // uart_send(buf[user_buffer_index]);
     // uart_send_string("\r\n");
+    //non-blocking
+    // for (size_t i = 0; i < size; i++) {
+    //     char c=0;
+    //     int result=uart_async_recv(&c);
+    //     uart_send_string("result: ");
+    //     uart_send_int(result);
+    //     uart_send_string("\r\n");
+    //     if(result){
+    //         buf[i]=c;
+    //         return size;
+    //     }
+    // }
+    //blocking
     for (size_t i = 0; i < size; i++) {
-        char c=0;
-        if(uart_async_recv(&c)){
-            buf[i]=c;
-            return size;
-        }
+        buf[i]=uart_recv();
+        return size;
     }
     // if (buf[user_buffer_index] == '\r' || buf[user_buffer_index] == '\n') {
     //     buf[user_buffer_index] = '\0';
@@ -280,7 +314,48 @@ int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
 }
 
 int sys_kill(trap_frame_t *frame,int pid) {
-    user_thread_exit(frame,NULL);
+    user_thread_exit(frame,pid);
     // TODO: Implement kill system call
     return 0;
 } 
+
+// 這個函數在 process_task_queue 中被呼叫
+void execute_syscall_task(void *data) {
+    if (!data) return;
+
+    syscall_task_data_t *task_data = (syscall_task_data_t *)data;
+    trap_frame_t *frame = task_data->frame_ptr; // 取得對應的 Trap Frame
+
+    if (!frame) {
+        uart_send_string("KERN Error: Task data frame pointer is NULL!\r\n");
+        dynamic_free(task_data);
+        return;
+    }
+
+    uint64_t ret_val = 0; // 預設回傳值
+
+    // 根據系統呼叫編號執行
+    switch (task_data->syscall_number) {
+        case SYS_UART_READ:
+            // !!! 警告：如果 sys_uart_read 阻塞，會卡住 Task Queue !!!
+            ret_val = sys_uart_read((char*)task_data->args[0], (size_t)task_data->args[1]);
+            break;
+        case SYS_UART_WRITE:
+            ret_val = sys_uart_write((const char*)task_data->args[0], (size_t)task_data->args[1]);
+            break;
+
+        // --- 不再處理其他系統呼叫 ---
+        default:
+            uart_send_string("Error: Unexpected syscall in task queue: ");
+            uart_send_hex(task_data->syscall_number);
+            uart_send_string("\r\n");
+            ret_val = -1; // 寫入錯誤碼
+            break;
+    }
+
+    // 將結果寫回 Trap Frame 的 x0
+    frame->x0 = ret_val;
+
+    // 釋放儲存任務資料的記憶體
+    dynamic_free(task_data);
+}

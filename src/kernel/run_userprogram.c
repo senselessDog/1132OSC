@@ -26,8 +26,10 @@ void el0_core_timer_enable(void)
 
     // mrs x0, cntfrq_el0
     // msr cntp_tval_el0, x0 // set expired time
-    asm volatile("mrs x0, cntfrq_el0");
-    asm volatile("msr cntp_tval_el0, x0");
+    uint64_t timer_freq;
+    asm volatile("mrs %0, cntfrq_el0" : "=r"(timer_freq));
+    uint64_t timeout=timer_freq>>5;
+    asm volatile("msr cntp_tval_el0, %0" : : "r"(timeout));
 
     // mov x0, 2
     // ldr x1, =CORE0_TIMER_IRQ_CTRL

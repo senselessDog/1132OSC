@@ -271,7 +271,7 @@ void* buddy_malloc(size_t size) {
         block_idx = buddy_system->first_avail[requested_order];
         order = requested_order;
     }
-    // uart_send_string("After split: [0][0] address=");
+    uart_send_string("After split: [0][0] address=");
     // uart_send_hex(&buddy_system->buddy_list[0]);
     // uart_send_string(", next=");
     // uart_send_hex(buddy_system->buddy_list[0][0].next);
@@ -520,13 +520,13 @@ void* dynamic_malloc(size_t size) {
             free_list_counts[pool_index]++;
         }
         
-        uart_send_string("Created new pool: size ");
-        uart_send_int(block_size);
-        uart_send_string(", ");
-        uart_send_int(blocks_per_page);
-        uart_send_string(" blocks at page 0x");
-        uart_send_hex((uint32_t)new_page);
-        uart_send_string("\r\n");
+        // uart_send_string("Created new pool: size ");
+        // uart_send_int(block_size);
+        // uart_send_string(", ");
+        // uart_send_int(blocks_per_page);
+        // uart_send_string(" blocks at page 0x");
+        // uart_send_hex((uint32_t)new_page);
+        // uart_send_string("\r\n");
     }
     
     // Now take a block from the free list
@@ -540,13 +540,13 @@ void* dynamic_malloc(size_t size) {
     // The block_header could be saved somewhere for later use in free
     // Or simply create a new one during free operation
     
-    uart_send_string("Small allocation: requested ");
-    uart_send_int(size);
-    uart_send_string(" bytes, allocated ");
-    uart_send_int(POOL_SIZES[pool_index]);
-    uart_send_string(" bytes at address 0x");
-    uart_send_hex((uint32_t)allocated_memory);
-    uart_send_string("\r\n");
+    // uart_send_string("Small allocation: requested ");
+    // uart_send_int(size);
+    // uart_send_string(" bytes, allocated ");
+    // uart_send_int(POOL_SIZES[pool_index]);
+    // uart_send_string(" bytes at address 0x");
+    // uart_send_hex((uint32_t)allocated_memory);
+    // uart_send_string("\r\n");
     
     return allocated_memory;
 }
@@ -578,17 +578,17 @@ void dynamic_free(void* ptr) {
         free_lists[pool_index] = block;
         free_list_counts[pool_index]++;
         
-        uart_send_string("Freed small block at 0x");
-        uart_send_hex((uint32_t)ptr);
-        uart_send_string(" to pool size ");
-        uart_send_int(POOL_SIZES[pool_index]);
-        uart_send_string("\r\n");
+        // uart_send_string("Freed small block at 0x");
+        // uart_send_hex((uint32_t)ptr);
+        // uart_send_string(" to pool size ");
+        // uart_send_int(POOL_SIZES[pool_index]);
+        // uart_send_string("\r\n");
     } else {
         // This is a direct allocation from buddy system
         buddy_free(ptr);
-        uart_send_string("Freed large block at 0x");
-        uart_send_hex((uint32_t)ptr);
-        uart_send_string(" back to buddy system\r\n");
+        // uart_send_string("Freed large block at 0x");
+        // uart_send_hex((uint32_t)ptr);
+        // uart_send_string(" back to buddy system\r\n");
     }
 }
 

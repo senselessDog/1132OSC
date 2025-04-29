@@ -2,7 +2,7 @@
 #define NULL ((void *)0)
 #endif
 #include "task_queue.h"
-
+#include <stdint.h>
 // Global task queue
 task_queue_t global_task_queue;
 // 全局變數跟踪當前執行的任務
@@ -50,12 +50,21 @@ void enqueue_task(task_queue_t *queue, void (*callback)(void *), void *data, int
     queue->size++;
 
     // 恢复中断
-    enable_interrupts();
+    // enable_interrupts();
 }
 void process_task_queue()
 {
     // 启用中断以允许嵌套中断
+    // uint64_t spsr;
+    // uart_send_string("spsr_el1\r\n");
+    // asm volatile("mrs %0, spsr_el1" : "=r"(spsr));
+    // uart_send_hex(spsr);
+    // uart_send_string("\r\n");
     enable_interrupts();
+    // uart_send_string("spsr_el1\r\n");
+    // asm volatile("mrs %0, spsr_el1" : "=r"(spsr));
+    // uart_send_hex(spsr);
+    // uart_send_string("\r\n");
 
     // 处理队列中的所有任务
     task_t *task;
@@ -65,9 +74,14 @@ void process_task_queue()
         task->callback(task->data);
         task = NULL;
     }
-
+    // uint64_t spsr;
+    // uart_send_string("spsr_el1\r\n");
+    // asm volatile("mrs %0, spsr_el1" : "=r"(spsr));
+    // uart_send_hex(spsr);
+    // uart_send_string("\r\n");
     // 防止竞态条件
     disable_interrupts();
+    
 }
 // Get the highest priority task from the queue
 task_t *get_highest_priority_task(task_queue_t *queue)
