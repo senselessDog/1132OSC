@@ -271,7 +271,7 @@ void* buddy_malloc(size_t size) {
         block_idx = buddy_system->first_avail[requested_order];
         order = requested_order;
     }
-    uart_send_string("After split: [0][0] address=");
+    // uart_send_string("After split: [0][0] address=");
     // uart_send_hex(&buddy_system->buddy_list[0]);
     // uart_send_string(", next=");
     // uart_send_hex(buddy_system->buddy_list[0][0].next);

@@ -68,7 +68,7 @@ void handle_syscall(uint64_t kernel_sp) {
             // Note: Successful exec won't return here
             break;
         case SYS_EXIT:
-            sys_exit((int)arg0); // Does not return
+            sys_exit(frame); // Does not return
             break; // Should not be reached
         case SYS_KILL:
             sys_kill(frame, (int)arg0);
@@ -184,7 +184,10 @@ int sys_exec(const char* name, char* const argv[],trap_frame_t *frame) {
  
 int sys_fork(trap_frame_t *frame) {
     
-    
+    uart_send_string("[sys_fork]parent thread id: ");
+    thread_t *parent = get_current();
+    uart_send_int(parent->id);
+    uart_send_string("\r\n");
     uart_send_string("[sys_fork]frame->elr_el1: ");
     uart_send_hex(frame->elr_el1);
     uart_send_string("\r\n");
@@ -198,10 +201,11 @@ int sys_fork(trap_frame_t *frame) {
     thread_t *child = thread_create(NULL, frame);
     //for parent thread
     frame->x0=child->id; 
-    save_trap_frame(frame,get_current());
+    
     // 手動保存父進程的寄存器狀態
+    save_trap_frame(frame,get_current());
     uart_send_string("Parent Thread id: ");
-    thread_t *parent = get_current();
+    parent = get_current();
     uart_send_int(parent->id);
     uart_send_string("\r\n");
     uart_send_string("Child Thread id: ");
@@ -293,7 +297,9 @@ int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
 
     // 3. 分配 16 位元組對齊的核心緩衝區
     void *kernel_mbox =dynamic_malloc(buffer_size);
-
+    // uart_send_string("[sys_mbox_call] Allocating kernel mailbox buffer...\r\n");
+    // uart_send_hex((uint32_t)kernel_mbox);
+    // uart_send_string("\r\n");
     // 4. 複製請求 (User -> Kernel)
     //    !!! 警告：沒有 MMU，直接 memcpy 有風險 !!!
     memcpy((void *)kernel_mbox, user_mbox, buffer_size);
@@ -305,9 +311,12 @@ int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
     //    !!! 警告：沒有 MMU，直接 memcpy 有風險 !!!
     //    通常 mailbox[1] 會被 GPU 更新為 RESPONSE_SUCCESS 或 RESPONSE_ERROR
     memcpy(user_mbox, (void *)kernel_mbox, buffer_size);
-
+    // uart_send_string("[sys_mbox_call] Mailbox call result: ");
+    // uart_send_int(result);
+    // uart_send_string("\r\n");
     // 7. 釋放核心緩衝區
     dynamic_free((void*)kernel_mbox);
+    // uart_send_string("[sys_mbox_call] Sucess finish kernel mailbox buffer...\r\n");
 
     // 8. 回傳結果 (lowlevel 的回傳值, 0 代表成功)
     return result;

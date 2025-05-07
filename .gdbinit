@@ -10,6 +10,7 @@ define kernel
   # b sync_lower_el_64_entry
   # b get_current
   # b sys_exec
+  b user_idle
   # b user_thread_schedule
   # b el0_core_timer_enable
   # b lower_el_irq_entry

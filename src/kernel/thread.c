@@ -295,15 +295,15 @@ void fork_schedule(uint64_t parent_sp) {
     // prev->sp = prev_thread_sp-7*16;
     //Don't habe to deal with current thread sp
     //current thread sp is already updated in switch.S
-    uart_send_string("[schedule] switch to thread: ");
+    uart_send_string("[fork_schedule] switch to thread: ");
     uart_send_int(current_thread->id);
-    uart_send_string("\r\n");
-    uart_send_string("current sp: ");
-    uart_send_hex(current_thread->thread_context.sp);
-    uart_send_string("\r\n");
-    uart_send_string("prev sp: ");
-    uart_send_hex(prev->thread_context.sp);
-    uart_send_string("\r\n");
+    // uart_send_string("\r\n");
+    // uart_send_string("current sp: ");
+    // uart_send_hex(current_thread->thread_context.sp);
+    // uart_send_string("\r\n");
+    // uart_send_string("prev sp: ");
+    // uart_send_hex(prev->thread_context.sp);
+    // uart_send_string("\r\n");
     asm volatile("mov %0, sp" : "=r"(prev->thread_context.sp));
     asm volatile("mov %0, fp" : "=r"(prev->thread_context.fp));
     asm volatile("mov %0, lr" : "=r"(prev->thread_context.lr));
@@ -338,12 +338,12 @@ void fork_schedule(uint64_t parent_sp) {
     asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
     uart_send_hex(spsr_el1);
     uart_send_string("\r\n");
-    uart_send_string("prev user fp: ");
-    uart_send_hex(prev->fp);
-    uart_send_string("\r\n");
-    uart_send_string("next user fp: ");
-    uart_send_hex(next->fp);
-    uart_send_string("\r\n");
+    // uart_send_string("prev user fp: ");
+    // uart_send_hex(prev->fp);
+    // uart_send_string("\r\n");
+    // uart_send_string("next user fp: ");
+    // uart_send_hex(next->fp);
+    // uart_send_string("\r\n");
     memcpy((void *)(next->fp-THREAD_STACK_SIZE), (void *)(prev->fp-THREAD_STACK_SIZE), THREAD_STACK_SIZE);
     asm volatile("msr sp_el0,%0 " : :"r"(next->thread_context.fp-((uint64_t)prev->fp-frame->sp_el0)));
     //update frame->sp_el0 to child thread stack

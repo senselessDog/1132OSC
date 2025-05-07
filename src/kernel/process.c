@@ -35,6 +35,7 @@ void user_thread_schedule(trap_frame_t *frame) {
     if (!run_queue) {
         shell();
     }
+    
     thread_t *current_thread = get_current();
     // uart_send_string("[user_thread_schedule] current_thread: ");
     // uart_send_int(current_thread->id);
@@ -49,7 +50,7 @@ void user_thread_schedule(trap_frame_t *frame) {
             break;
         }
         else if (next == run_queue && next->state == THREAD_DEAD) {
-            uart_send_string("[user_thread_schedule] run_queue is dead, use idle thread\r\n");
+            //uart_send_string("[user_thread_schedule] run_queue is dead, use idle thread\r\n");
             user_idle(frame);
             break;
         }
@@ -61,8 +62,10 @@ void user_thread_schedule(trap_frame_t *frame) {
         idle();
         return;
     }
-    
-
+    // //check frame address
+    // uart_send_string("[user_thread_schedule] frame address: ");
+    // uart_send_hex(frame);
+    // uart_send_string("\r\n");
     // Switch context
     thread_t *prev = current_thread;
     prev->state = THREAD_READY;
@@ -72,19 +75,25 @@ void user_thread_schedule(trap_frame_t *frame) {
     while(prev->id==current_thread->id){
         return;
     };
-
-    //update prev thread sp
-    // uint64_t prev_thread_sp;
-    // asm volatile("mov %0, sp" : "=r"(prev_thread_sp));
-    // prev->sp = prev_thread_sp-7*16;
-    //Don't habe to deal with current thread sp
-    //current thread sp is already updated in switch.S
-    // uart_send_string("[user_thread_schedule] switch to thread: ");
+    // uart_send_string("[user_thread_schedule] prev->id: ");
+    // uart_send_int(prev->id);
+    // uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule]frame->elr_el1: ");
+    // uart_send_hex(frame->elr_el1);
+    // uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule]frame->sp_el0: ");
+    // uart_send_hex(frame->sp_el0);
+    // uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule]frame->tpidr_el1: ");
+    // uart_send_hex(frame->tpidr_el1);
+    // uart_send_string("\r\n");
+    // Save prev thread's trap frame
+    save_trap_frame(frame,prev);
+    // Restore current thread's trap frame
+    restore_trap_frame(frame,current_thread);
+    // uart_send_string("[user_thread_schedule] current_thread->id: ");
     // uart_send_int(current_thread->id);
     // uart_send_string("\r\n");
-    
-    save_trap_frame(frame,prev);
-    restore_trap_frame(frame,current_thread);
     // uart_send_string("[user_thread_schedule]frame->elr_el1: ");
     // uart_send_hex(frame->elr_el1);
     // uart_send_string("\r\n");

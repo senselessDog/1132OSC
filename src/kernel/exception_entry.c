@@ -4,6 +4,7 @@
 #include "gpu_interrupt.h"
 #include "task_queue.h"
 #include "syscall.h"
+#include "thread.h"
 #define MMIO_BASE 0x3F000000
 #define IRQ_PENDING1 ((volatile uint32_t *)(MMIO_BASE + 0x0000B204))
 void display_timer_info(void *arg);
