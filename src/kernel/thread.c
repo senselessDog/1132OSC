@@ -297,7 +297,7 @@ void fork_schedule(uint64_t parent_sp) {
     //current thread sp is already updated in switch.S
     uart_send_string("[fork_schedule] switch to thread: ");
     uart_send_int(current_thread->id);
-    // uart_send_string("\r\n");
+    uart_send_string("\r\n");
     // uart_send_string("current sp: ");
     // uart_send_hex(current_thread->thread_context.sp);
     // uart_send_string("\r\n");
@@ -327,14 +327,15 @@ void fork_schedule(uint64_t parent_sp) {
     // uart_send_string("\r\n");
     // uart_send_string("sp0: ");
     uint64_t sp0,elr_el1,spsr_el1;
+    uart_send_string("[fork_schedule]sp_el0: ");
     asm volatile("mrs %0, sp_el0" : "=r"(sp0));
     uart_send_hex(sp0);
     uart_send_string("\r\n");
-    uart_send_string("elr_el1: ");
+    uart_send_string("[fork_schedule]elr_el1: ");
     asm volatile("mrs %0, elr_el1" : "=r"(elr_el1));
     uart_send_hex(elr_el1);
     uart_send_string("\r\n");
-    uart_send_string("spsr_el1: ");
+    uart_send_string("[fork_schedule]spsr_el1: ");
     asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
     uart_send_hex(spsr_el1);
     uart_send_string("\r\n");
@@ -391,6 +392,9 @@ void fork_schedule(uint64_t parent_sp) {
     // uart_send_string("[schedule] current lr: ");
     // uart_send_hex(current_thread->thread_context.lr);
     // uart_send_string("\r\n");
+    //store tpidr_el1
+    change_tpidr(current_thread);
+
 
 }
 

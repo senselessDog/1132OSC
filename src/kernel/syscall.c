@@ -15,6 +15,7 @@ void execute_syscall_task(void *data);
 // System call handler function
 // kernel_sp 指向 Trap Frame
 void handle_syscall(uint64_t kernel_sp) {
+    disable_interrupts(); // 禁用中斷
     trap_frame_t *frame = (trap_frame_t *)kernel_sp;
     uint64_t syscall_number = frame->x8; // 從 x8 讀取 syscall 號
     uint64_t arg0 = frame->x0;
@@ -204,11 +205,11 @@ int sys_fork(trap_frame_t *frame) {
     
     // 手動保存父進程的寄存器狀態
     save_trap_frame(frame,get_current());
-    uart_send_string("Parent Thread id: ");
+    uart_send_string("[sys_fork]Parent Thread id: ");
     parent = get_current();
     uart_send_int(parent->id);
     uart_send_string("\r\n");
-    uart_send_string("Child Thread id: ");
+    uart_send_string("[sys_fork]Child Thread id: ");
     uart_send_int(child->id);
     uart_send_string("\r\n");
     

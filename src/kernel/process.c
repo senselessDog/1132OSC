@@ -21,13 +21,16 @@ void user_thread_exit(trap_frame_t *frame,int thread_id) {
         delete_thread=current;
     } 
     if (delete_thread) {
-        uart_send_string("Thread ID: ");
+        uart_send_string("[user_thread_exit] Thread ID: ");
         uart_send_int(delete_thread->id);
         uart_send_string(" exiting.\r\n");
         delete_thread->state = THREAD_DEAD;
         remove_from_run_queue(delete_thread); // Remove from scheduling
         user_thread_schedule(frame); // Switch to another thread
         delete_thread->state = THREAD_DEAD;// Continue to load all
+        uart_send_string("[user_thread_exit] Thread ID: ");
+        uart_send_int(delete_thread->id);
+        uart_send_string(" exited.\r\n");
     }
 }
 
@@ -37,9 +40,9 @@ void user_thread_schedule(trap_frame_t *frame) {
     }
     
     thread_t *current_thread = get_current();
-    // uart_send_string("[user_thread_schedule] current_thread: ");
-    // uart_send_int(current_thread->id);
-    // uart_send_string("\r\n");
+    uart_send_string("[user_thread_schedule] current_thread: ");
+    uart_send_int(current_thread->id);
+    uart_send_string("\r\n");
     // Find next ready thread
     thread_t *next = current_thread->next;
     while (next) {
@@ -94,6 +97,7 @@ void user_thread_schedule(trap_frame_t *frame) {
     // uart_send_string("[user_thread_schedule] current_thread->id: ");
     // uart_send_int(current_thread->id);
     // uart_send_string("\r\n");
+    change_tpidr(current_thread);
     // uart_send_string("[user_thread_schedule]frame->elr_el1: ");
     // uart_send_hex(frame->elr_el1);
     // uart_send_string("\r\n");

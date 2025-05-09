@@ -93,3 +93,7 @@ process_switch_to:
 get_current:
     mrs x0, tpidr_el1
     ret 
+.global change_tpidr
+change_tpidr:
+    msr tpidr_el1, x0
+    ret
