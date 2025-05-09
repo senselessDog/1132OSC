@@ -8,6 +8,7 @@
 #include "mailbox.h"
 #include "task_queue.h"
 extern uint32_t g_initramfs_addr;
+int should_run_task_queue = 0;
 // System call handler function
 // 任務回呼函數的原型
 void execute_syscall_task(void *data);
@@ -24,12 +25,13 @@ void handle_syscall(uint64_t kernel_sp) {
     // ... 可以讀取更多參數 ...
 
     // uart_send_string("[Syscall Entry] SYSCALL_NUM="); uart_send_hex(syscall_number); uart_send_string("\r\n");
-
+    should_run_task_queue = 0;
     switch (syscall_number) {
         // --- 延遲處理的系統呼叫 (放入 Task Queue) ---
         case SYS_UART_READ:
         case SYS_UART_WRITE:
         {
+            should_run_task_queue = 1;
             syscall_task_data_t *task_data = (syscall_task_data_t *)dynamic_malloc(sizeof(syscall_task_data_t));
             if (!task_data) {
                 frame->x0 = -1;
@@ -158,12 +160,14 @@ size_t sys_uart_write(const char* buf, size_t size) {
 }
 
 int sys_exec(const char* name, char* const argv[],trap_frame_t *frame) {
-    // TODO: Implement exec system call
-    save_trap_frame(frame,get_current());
+    // 1. Save the current thread's state
+    thread_t* current_thread=get_current();
+    save_trap_frame(frame,current_thread);
+    current_thread->state=THREAD_READY;
     //create new thread
     thread_t *execute_thread = thread_create(name, NULL);
     //allocate user space
-    void *user_base=run_user(g_initramfs_addr);
+    void *user_base=run_user((char *)g_initramfs_addr);
     frame->x0=execute_thread->id;
     //allocate new thread context and pass to frame
     execute_thread->trap_frame.elr_el1=user_base;
@@ -241,7 +245,7 @@ int sys_fork(trap_frame_t *frame) {
     // memcpy((void *)child->thread_context.fp-THREAD_STACK_SIZE, (void *)frame->x29-THREAD_STACK_SIZE, THREAD_STACK_SIZE);
     // frame->sp_el0=child->thread_context.fp-(frame->x29-frame->sp_el0);
     frame->tpidr_el1=child;
-    fork_schedule(frame);
+    fork_schedule(frame,child);
     uint64_t sp_el0;
     //asm volatile("mrs %0, sp_el0" : "=r"(sp_el0));
     sp_el0=frame->sp_el0;

@@ -19,7 +19,7 @@ void uart_send_int(int value);
 void *simple_alloc(size_t size);
 int fdt_init(void *fdt_addr);
 // lab3
-void run_user(char *archive);
+void *run_user(char *archive);
 void cmd_setTimeout(int argc, char **argv);
 void async_io_test();
 // 從 DTB 中獲取 initramfs 信息的全局變量

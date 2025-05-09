@@ -247,7 +247,8 @@ void schedule(int is_exit) {
     extern void switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
     switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);
 }
-void fork_schedule(uint64_t parent_sp) {
+void fork_schedule(uint64_t parent_sp, thread_t* child_thread) {
+    //先不使用current_thread
     trap_frame_t *frame = (trap_frame_t *)parent_sp;
     uart_send_string("[fork_schedule] parent sp: ");
     uart_send_hex(parent_sp);
@@ -255,16 +256,23 @@ void fork_schedule(uint64_t parent_sp) {
     if (!run_queue) {
         return;
     }
-
+    current_thread = get_current();
     // Find next ready thread
     thread_t *next = current_thread->next;
     while (next) {
-        if (next->state == THREAD_READY) {
+        if (next == child_thread) {
             break;
         }
-        else if (next == current_thread && next->state == THREAD_RUNNING) {
+        else if (next == current_thread) {
+            uart_send_string("Error: [fork_schedule] Can't find child thread");
             break;
         }
+        uart_send_string("[fork_schedule] next_thread: ");
+        uart_send_int(next->id);
+        uart_send_string("\r\n");
+        uart_send_string("[fork_schedule] next_thread state: ");
+        uart_send_int(next->state);
+        uart_send_string("\r\n");
         next = next->next;
     }
 
@@ -304,9 +312,9 @@ void fork_schedule(uint64_t parent_sp) {
     // uart_send_string("prev sp: ");
     // uart_send_hex(prev->thread_context.sp);
     // uart_send_string("\r\n");
-    asm volatile("mov %0, sp" : "=r"(prev->thread_context.sp));
-    asm volatile("mov %0, fp" : "=r"(prev->thread_context.fp));
-    asm volatile("mov %0, lr" : "=r"(prev->thread_context.lr));
+    // asm volatile("mov %0, sp" : "=r"(prev->thread_context.sp));
+    // asm volatile("mov %0, fp" : "=r"(prev->thread_context.fp));
+    // asm volatile("mov %0, lr" : "=r"(prev->thread_context.lr));
     // uart_send_string("[schedule] prev sp: ");
     // uart_send_hex(prev->thread_context.sp);
     // uart_send_string("\r\n");

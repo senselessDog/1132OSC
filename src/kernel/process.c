@@ -40,11 +40,18 @@ void user_thread_schedule(trap_frame_t *frame) {
     }
     
     thread_t *current_thread = get_current();
-    uart_send_string("[user_thread_schedule] current_thread: ");
-    uart_send_int(current_thread->id);
-    uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule] current_thread: ");
+    // uart_send_int(current_thread->id);
+    // uart_send_string("\r\n");
     // Find next ready thread
     thread_t *next = current_thread->next;
+    // //check next thread
+    // uart_send_string("[user_thread_schedule] next_thread: ");
+    // uart_send_int(next->id);
+    // uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule] next_thread state: ");
+    // uart_send_int(next->state);
+    // uart_send_string("\r\n");
     while (next) {
         if (next->state == THREAD_READY) {
             break;
@@ -52,13 +59,14 @@ void user_thread_schedule(trap_frame_t *frame) {
         else if (next == current_thread && next->state == THREAD_RUNNING) {
             break;
         }
-        else if (next == run_queue && next->state == THREAD_DEAD) {
+        else if (next == current_thread && next->state == THREAD_DEAD) {
             //uart_send_string("[user_thread_schedule] run_queue is dead, use idle thread\r\n");
             user_idle(frame);
             break;
         }
         next = next->next;
     }
+    
 
     // If no ready thread found, use idle thread
     if (!next) {
@@ -94,10 +102,10 @@ void user_thread_schedule(trap_frame_t *frame) {
     save_trap_frame(frame,prev);
     // Restore current thread's trap frame
     restore_trap_frame(frame,current_thread);
+    change_tpidr(current_thread);
     // uart_send_string("[user_thread_schedule] current_thread->id: ");
     // uart_send_int(current_thread->id);
     // uart_send_string("\r\n");
-    change_tpidr(current_thread);
     // uart_send_string("[user_thread_schedule]frame->elr_el1: ");
     // uart_send_hex(frame->elr_el1);
     // uart_send_string("\r\n");

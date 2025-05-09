@@ -174,6 +174,9 @@ struct file_information find_program_in_initramfs(char *archive, const char *fil
         int namesize = hex_to_int(header->c_namesize, 8);
         int filesize = hex_to_int(header->c_filesize, 8);
 
+        uart_send_string("file name address: ");
+        uart_send_hex(ptr);
+        uart_send_string("\r\n");
         uart_send_string("file: ");
         uart_send_string(ptr);
         uart_send_string("\r\n");

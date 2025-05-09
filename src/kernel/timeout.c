@@ -210,6 +210,8 @@ void process_timer_tasks(void *arg)
 //lab5
 void user_timeout_handler(trap_frame_t *frame)
 {
+    extern int should_run_task_queue;
+    should_run_task_queue = 0;
     uint32_t irq_id;
     // asm volatile("mrc p15, 0, %0, c12, c12, 0" : "=r"(irq_id)); // 讀 GICC_IAR
     // 處理計時器中斷

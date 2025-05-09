@@ -90,6 +90,12 @@ void *run_user(char *archive)
             index++;
         }
     }
+    uart_send_string("[run user] archive: ");
+    uart_send_hex((uint32_t)archive);
+    uart_send_string("\r\n");
+    uart_send_string("[run user] filename: ");
+    uart_send_string(filename);
+    uart_send_string("\r\n");
 
     struct file_information program_info = find_program_in_initramfs(archive, filename);
     if (!program_info.filecontext)

@@ -60,6 +60,11 @@ void process_task_queue()
     // asm volatile("mrs %0, spsr_el1" : "=r"(spsr));
     // uart_send_hex(spsr);
     // uart_send_string("\r\n");
+    extern int should_run_task_queue;
+    if (should_run_task_queue == 0)
+    {
+        return;
+    }
     enable_interrupts();
     // uart_send_string("spsr_el1\r\n");
     // asm volatile("mrs %0, spsr_el1" : "=r"(spsr));
