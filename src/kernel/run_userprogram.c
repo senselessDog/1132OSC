@@ -9,7 +9,7 @@ char uart_recv();
 void * user_stack;
 #define USER_PROGRAM_BASE 0x20000000
 #define USER_STACK_POINTER_BASE 0x21000000
-uint32_t user_space_size=65536;
+uint32_t user_space_size=1048576;
 struct file_information
 {
     void *filecontext;
@@ -115,13 +115,19 @@ void *run_user(char *archive)
     uart_send_hex(program_info.filesize);
     uart_send_string("\r\n");
     // Stack pointer should point to the top because stack grows downward
-    
+    //Warning: Please take carefully about program size, if the 
+    if (user_space_size<=program_info.filesize){
+        uart_send_string("Error: [run_program] user_space size lower than program size");
+        uart_send_string("\r\n");
+    }
     void * user_base=dynamic_malloc(user_space_size);
     // uart_send_string("Create parent thread: ");
     // thread_t * parent_thread=thread_create(user_base,NULL);
     // uart_send_string("Create parent thread success\r\n");
     user_stack=user_base+user_space_size;
-    memcpy(user_base, program_info.filecontext, (uint32_t)program_info.filesize);
+    
+    memcpy(user_base,(const void *)program_info.filecontext, (uint32_t)program_info.filesize);
+    // program_info = find_program_in_initramfs(archive, filename);
     //init user thread
     if (first_thread){
         thread_init_user();
@@ -133,6 +139,7 @@ void *run_user(char *archive)
     uart_send_string("user_stack: ");
     uart_send_hex(user_stack);
     uart_send_string("\r\n");
+    
     if (first_thread){
         first_thread=0;
         switch_to_el0(user_base, user_stack);

@@ -50,4 +50,6 @@ void sys_exit(trap_frame_t *frame);
 int sys_mbox_call(unsigned char ch, unsigned int* mbox);
 int sys_kill(trap_frame_t *frame,int pid);
 
+//singal
+#define SIGKILL 9
 #endif // SYSCALL_H 
