@@ -477,10 +477,10 @@ void init_dynamic_allocator() {
 void* dynamic_malloc(size_t size) {
     // For large allocations, use buddy system directly
     if (size > POOL_SIZES[NUM_POOLS - 1]) {
-        void* mem = buddy_malloc(size);
         uart_send_string("Large allocation: requested ");
         uart_send_int(size);
         uart_send_string(" bytes, use buddy_malloc\r\n");
+        void* mem = buddy_malloc(size);
         return mem;
     }
     

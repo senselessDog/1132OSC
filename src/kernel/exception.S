@@ -108,10 +108,19 @@
 
 default_exception_handler:
     eret
+handler_load:
+    svc_load_all                    // 恢復上下文
+    //msr DAIFClr, 0xf
+    eret                        // 返回中斷點
 
 el1_irq_exception_handler:
     //msr DAIFSet, 0xf
     svc_save_all                    // 保存上下文，使用之前定義的save_all宏
+    mov x20,x0
+    bl check_signals
+    cmp x0, #1
+    beq handler_load //If it is user_defined handler_load, direct to load
+    mov x0,x20
     bl el1_irq_entry        // Modified to accept SPSR parameter
     // 处理任务队列中的任务
     bl process_task_queue
@@ -140,6 +149,11 @@ sync_lower_el_64_handler:
 lower_el_irq_exception_handler:
     //msr DAIFSet, 0xf
     svc_save_all                    // 保存上下文，使用之前定義的save_all宏
+    mov x20,x0
+    bl check_signals
+    cmp x0, #1
+    beq handler_load // If it is user_defined handler_load, direct to load
+    mov x0,x20
     bl lower_el_irq_entry                // 調用C函數處理IRQ
     bl process_task_queue
     svc_load_all                    // 恢復上下文

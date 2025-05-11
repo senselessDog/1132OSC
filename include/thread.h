@@ -5,7 +5,7 @@
 #include "syscall.h"
 #define THREAD_STACK_SIZE 4096
 #define MAX_THREADS 64
-
+#define Handler_STACK_SIZE 4096
 typedef enum {
     THREAD_RUNNING,
     THREAD_READY,
@@ -23,6 +23,8 @@ typedef struct {
     uint64_t sp,base_addr;  // 16 * 6
 } thread_context_block_t;
 
+//singal number
+#define NSIG 32
 typedef struct {
     int id;
     thread_state_t state;
@@ -32,6 +34,14 @@ typedef struct {
     struct thread *next;
     void* fp;
     trap_frame_t trap_frame;
+    //for signal
+    uint32_t sigpending;                 // 一個 bitmask，每一位代表一個 signal 是否 pending。
+    // 例如，如果第 9 位是 1，表示 SIGKILL (假設編號為9) is pending.
+    void (*sighand[NSIG])(int);          // 一個函式指標陣列，儲存每個 signal 的 handler。
+    // sighand[signal_num] 指向該 signal 的處理函式。
+    trap_frame_t signal_backup_frame;    // 用於備份執行 user-mode handler 前的原始 trap frame。
+    int is_handling_signal;              // 標誌位，表示當前是否正在執行一個 user-mode signal handler (避免嵌套)。
+    void * handler_stack_ptr;
 } thread_t;
 
 // --- System Call Numbers ---
@@ -43,8 +53,10 @@ typedef struct {
 #define SYS_EXIT        5
 #define SYS_MBOX_CALL   6
 #define SYS_KILL        7
+//singal
 #define SYS_SIGNAL      8
 #define SYS_KILL_SIG    9
+#define SYS_SIGRETURN   10
 // Add more if needed, e.g., for signals later
 
 // Thread management functions
@@ -69,4 +81,4 @@ void restore_trap_frame(trap_frame_t *frame, thread_t *thread);
 // extern void set_current(thread_t *thd); // Sets TPIDR_EL1
 // extern void init_vectors(void); // Initializes exception vectors
 // extern void el1_to_el0(uint64_t elr, uint64_t spsr, uint64_t sp_el0); // Assembly helper for eret
-#endif // THREAD_H 
+#endif // THREAD_H

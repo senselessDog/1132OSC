@@ -105,6 +105,10 @@ void thread_init_user(void) {
     current_thread = kernel_thread;
     add_to_run_queue(kernel_thread);
     uart_send_string("First user initialized and Created.\r\n");
+    //signal
+    for (int i = 0; i < NSIG; i++) {
+        current_thread->sighand[i] = SIG_DFL;
+    }
 }
 thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     // Allocate memory for new thread
@@ -154,6 +158,10 @@ thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     uart_send_string("new thread sp: ");
     uart_send_hex(new_thread->thread_context.sp);
     uart_send_string("\r\n");
+    //NSIG
+    for (int i = 0; i < NSIG; i++) {
+        new_thread->sighand[i] = SIG_DFL;
+    }
     return new_thread;
 }
 
@@ -543,4 +551,30 @@ void restore_trap_frame(trap_frame_t *frame, thread_t *thread) {
     frame->elr_el1=thread->trap_frame.elr_el1;
     frame->spsr_el1=thread->trap_frame.spsr_el1;
     frame->tpidr_el1=thread->trap_frame.tpidr_el1;
+}
+
+thread_t * find_thread_by_pid(int pid){
+    thread_t *current_thread = get_current();
+    // uart_send_string("[user_thread_schedule] current_thread: ");
+    // uart_send_int(current_thread->id);
+    // uart_send_string("\r\n");
+    // Find next ready thread
+    thread_t *next = current_thread->next;
+    // //check next thread
+    // uart_send_string("[user_thread_schedule] next_thread: ");
+    // uart_send_int(next->id);
+    // uart_send_string("\r\n");
+    // uart_send_string("[user_thread_schedule] next_thread state: ");
+    // uart_send_int(next->state);
+    // uart_send_string("\r\n");
+    while (next) {
+        if (next->id == pid){
+            break;
+        }else if (next==current_thread){
+            uart_send_string("Error: [find_thread_by_pid] can't find target thread");
+            return 0;
+        }
+        next = next->next;
+    }
+    return next;
 }

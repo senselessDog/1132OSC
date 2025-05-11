@@ -49,7 +49,12 @@ int sys_fork();
 void sys_exit(trap_frame_t *frame);
 int sys_mbox_call(unsigned char ch, unsigned int* mbox);
 int sys_kill(trap_frame_t *frame,int pid);
-
+//handler
+void (*sys_signal(int signal_num, void (*handler_addr)(int)))(int);
+void timer_disable(void);
+// 特殊的 handler 值 (通常定義在全域)
+#define SIG_DFL ((void (*)(int))0)  // Default action
+#define SIG_IGN ((void (*)(int))1)  // Ignore signal
 //singal
 #define SIGKILL 9
 #endif // SYSCALL_H 

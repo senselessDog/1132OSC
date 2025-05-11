@@ -97,3 +97,10 @@ get_current:
 change_tpidr:
     msr tpidr_el1, x0
     ret
+
+
+.global sigreturn_trampoline_entry
+sigreturn_trampoline_entry:
+    mov x8, #10
+    svc 0
+    ret

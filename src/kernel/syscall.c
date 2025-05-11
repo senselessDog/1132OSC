@@ -77,6 +77,22 @@ void handle_syscall(uint64_t kernel_sp) {
             sys_kill(frame, (int)arg0);
             frame->x0 = 0; // Assume kill returns 0 on success?
             break;
+        //for systmcall
+        case SYS_SIGNAL: // syscall number 8
+            // arg0 (frame->x0) is SIGNAL number
+            // arg1 (frame->x1) is handler address (or SIG_DFL, SIG_IGN)
+            frame->x0 = sys_signal((int)arg0, (void (*)(int))arg1);
+            break;
+        case SYS_KILL_SIG: // syscall number 9 (確認這是您用於 POSIX kill 的編號)
+            // arg0 (frame->x0) is pid
+            // arg1 (frame->x1) is SIGNAL number
+            frame->x0 = sys_kill_signal((int)arg0, (int)arg1); // 避免與您之前的 sys_kill 混淆
+            break;
+        case SYS_SIGRETURN:
+            // 此 system call 通常沒有參數，或者參數是隱含的 (trap frame)
+            sys_sigreturn(frame); // frame 是當前 handler 返回時的 trap frame
+            // sys_sigreturn 會修改 frame 以恢復到原始狀態，所以不需要返回值給 x0
+            break;
 
         default:
             uart_send_string("Unknown system call: ");
@@ -246,6 +262,16 @@ int sys_fork(trap_frame_t *frame) {
     // frame->sp_el0=child->thread_context.fp-(frame->x29-frame->sp_el0);
     frame->tpidr_el1=child;
     fork_schedule(frame,child);
+    //Deal with signal
+    // 1. 複製 sighand 陣列
+    memcpy(child->sighand, parent->sighand, sizeof(void (*)(int)) * NSIG);
+
+    // 2. 子行程的 pending signals 應該是空的
+    child->sigpending = 0;
+
+    // 3. 子行程不應該處於 is_handling_signal 狀態
+    child->is_handling_signal = 0;
+    uart_send_string("[sys_fork] Finished signal copy\r\n");
     uint64_t sp_el0;
     //asm volatile("mrs %0, sp_el0" : "=r"(sp_el0));
     sp_el0=frame->sp_el0;
@@ -372,4 +398,95 @@ void execute_syscall_task(void *data) {
 
     // 釋放儲存任務資料的記憶體
     dynamic_free(task_data);
+}
+
+void (*sys_signal(int signal_num, void (*handler_addr)(int)))(int) {
+    thread_t *current = get_current();
+    void (*old_handler)(int);
+
+    if (signal_num <= 0 || signal_num >= NSIG) {
+        uart_send_string("Error: [sys_signal] invalid signal number");
+        // 無效的 signal number
+        return -1; // SIG_ERR 通常是 (void (*)(int))-1
+    }
+
+    // // SIGKILL 和 SIGSTOP (如果實作) 的 handler 不能被改變
+    // if (signal_num == SIGKILL /* || signal_num == SIGSTOP */) {
+    //     uart_send_string("Error: [sys_signal] can't change SIGKILL handler");
+    //     return -1; // 或者返回錯誤，表示不允許
+    // }
+
+    old_handler = current->sighand[signal_num];
+    current->sighand[signal_num] = handler_addr;
+    uart_send_string("[sys_signal] Sucessful define user_handler\r\n");
+    return old_handler; // POSIX 要求返回舊的 handler
+}
+
+int sys_kill_signal(int pid, int signal_num) {
+    thread_t *target_thread;
+
+    if (signal_num <= 0 || signal_num >= NSIG) {
+        uart_send_string("Error: [sys_kill_signal] invalid signal number");
+        return -1; // 無效的 signal number (Error: EINVAL)
+    }
+
+    target_thread = find_thread_by_pid(pid); // 您需要實作這個函式
+    if (!target_thread) {
+        uart_send_string("Error: [sys_kill_signal] can't find target thread");
+        return -1; // 目標行程不存在 (Error: ESRCH)
+    }
+    thread_t* current = get_current();
+
+    uart_send_string("[sys_kill_signal] Pid ");
+    uart_send_int(current->id);
+    uart_send_string(" Delivering signal ");
+    uart_send_int(signal_num);
+    uart_send_string(" to pid "); 
+    uart_send_int(pid); 
+    uart_send_string("\r\n");
+
+    // 設定 target_thread->sigpending 中對應 signal_num 的位元
+    target_thread->sigpending |= (1 << signal_num);
+
+    // 如果目標行程正在等待某個可被 signal 中斷的事件 (例如 sleep, wait)，
+    // 則需要喚醒它，讓它可以檢查並處理 signal。 (進階功能，初期可省略)
+
+    return 0; // 成功
+}
+
+void sys_sigreturn(trap_frame_t *current_handler_frame) {
+    thread_t *current = get_current();
+
+    if (!current->is_handling_signal) {
+        // 錯誤：不在 signal handling 狀態卻呼叫了 sigreturn
+        uart_send_string("Error: [sys_sigreturn] sigreturn called without sys_sigreturn\r\n");
+        // 可以選擇終止行程或忽略
+        //user_thread_exit(current_handler_frame, current->id); // 例如，終止
+        return;
+    }
+    // uart_send_string("[sys_sigreturn] Enter sigreturn\r\n");
+    
+    // uart_send_string("Kernel: sys_sigreturn called by pid "); uart_send_int(current->id); uart_send_string("\r\n");
+    uart_send_string("[sys_sigreturn] Before Thread Frame x30= ");
+    uart_send_hex((uint64_t)current_handler_frame->x30);
+    uart_send_string("\r\n");
+    uart_send_string("[sys_sigreturn] Before Thread Frame elr_el1= ");
+    uart_send_hex((uint64_t)current_handler_frame->elr_el1);
+    uart_send_string("\r\n");
+    // 恢復原始的 user context
+    restore_trap_frame(current_handler_frame,current);
+    uart_send_string("[sys_sigreturn] After Thread Frame x30= ");
+    uart_send_hex((uint64_t)current_handler_frame->x30);
+    uart_send_string("\r\n");
+    uart_send_string("[sys_sigreturn] After Thread Frame elr_el1= ");
+    uart_send_hex((uint64_t)current_handler_frame->elr_el1);
+    uart_send_string("\r\n");
+
+    // 清理 signal handling 狀態
+    current->is_handling_signal = 0;
+
+    dynamic_free(current->handler_stack_ptr);
+    el0_core_timer_enable();
+
+    // 返回後，組合語言會用這個恢復後的 current_handler_frame (現在是原始 frame) 來 eret
 }

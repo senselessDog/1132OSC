@@ -11,6 +11,12 @@ define kernel
   # b get_current
   # b sys_exec
   b user_idle
+  b sys_signal
+  b sys_kill_signal
+  b signal.c:39
+  b handler_load
+  b sigreturn_trampoline_entry
+  b sys_sigreturn
   # b user_thread_schedule
   # b el0_core_timer_enable
   # b lower_el_irq_entry

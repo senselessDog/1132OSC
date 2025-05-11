@@ -17,7 +17,11 @@ struct file_information
 };
 static int first_thread=1;
 #define CORE0_TIMER_IRQ_CTRL 0x40000040
-
+void timer_disable(void){
+    //disable time interrupt
+    asm volatile("mov x0, #0");
+    asm volatile("msr cntp_ctl_el0, x0");
+}
 void el0_core_timer_enable(void)
 {
     // mov x0, 1
