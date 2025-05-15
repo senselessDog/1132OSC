@@ -73,36 +73,25 @@ qemu:
 qemu_video:
 	~/lab/qemu/build/qemu-system-aarch64 \
 	-machine raspi3b \
-	-kernel ~/lab/lab5/bootloader.img \
-	-initrd ~/lab/lab5/initramfs.cpio \
-	-dtb ~/lab/lab5/bcm2710-rpi-3-b-plus.dtb \
+	-kernel ~/lab/lab6/bootloader.img \
+	-initrd ~/lab/lab6/initramfs.cpio \
+	-dtb ~/lab/lab6/bcm2710-rpi-3-b-plus.dtb \
 	-display gtk \
 	-device usb-kbd \
 	-device usb-mouse \
 	-serial null \
 	-serial pty \
 	-S -s
-	# qemu-system-aarch64 \
-	# -machine raspi3b \
-	# -kernel ../../lab5/bootloader.img \
-	# -initrd initramfs.cpio \
-	# -dtb bcm2710-rpi-3-b-plus.dtb \
-	# -display gtk \
-	# -device usb-kbd \
-	# -device usb-mouse \
-	# -serial null 
-	# -serial pty
-	# -S -s
 	# # 使用 GTK 顯示(支援 OpenGL)
 	# # 啟用 USB 鍵盤（方便輸入命令）
 	# # 啟用 USB 滑鼠（可選）
 	# # 將串口輸出重定向到終端（方便調試）
 show_qemu:
-	sudo minicom -D /dev/pts/2 -b 115200
+	sudo minicom -D /dev/pts/1 -b 115200
 gdb_init:
 	gdb-multiarch -x .gdbinit
 python:
-	/bin/python3 /home/kuan/lab/lab5/script/upload_kernel.py
+	/bin/python3 /home/kuan/lab/lab6/script/upload_kernel.py
 
 show_raspberryPi:
 	sudo minicom -D /dev/ttyUSB0 -b 115200

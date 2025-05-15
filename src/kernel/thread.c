@@ -109,6 +109,8 @@ void thread_init_user(void) {
     for (int i = 0; i < NSIG; i++) {
         current_thread->sighand[i] = SIG_DFL;
     }
+    current_thread->is_handling_signal=0;
+    current_thread->sigpending=0;
 }
 thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     // Allocate memory for new thread

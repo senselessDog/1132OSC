@@ -1,12 +1,13 @@
 /* bootloader_linker.ld */
-ENTRY(_start)
+
 
 SECTIONS
 {
+    ENTRY(_start)
     . = 0x60000; /* Bootloader load address */
 
     .text.boot : {
-        KEEP(*(text.boot))
+        KEEP(*(.text.boot))
     }
 
     .text : {

@@ -1,7 +1,6 @@
 /* boot_kernel.S */
 
 .section ".text.boot"
-
 .global _start
 _start:
     /*
@@ -17,6 +16,11 @@ _start:
     
     /* switch kernel from EL2 to EL1*/
     bl from_el2_to_el1
+    // --- MMU Setup ---
+    b mmu_setup
+
+.global after_high_kernel_return
+after_high_kernel_return:
     /* set vector table*/
     bl set_exception_vector_table
     /* IRQ enable*/
