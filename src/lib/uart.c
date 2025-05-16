@@ -6,7 +6,7 @@ void uart_init();
 void uart_send(char c);
 char uart_recv();
 void uart_send_string(const char *str);
-void uart_send_hex(uint32_t value);
+void uart_send_hex(uint64_t value);
 
 // constants
 char rx_buffer[BUFFER_SIZE];
@@ -199,11 +199,11 @@ void uart_send_string(const char *str)
     }
 }
 
-void uart_send_hex(uint32_t value)
+void uart_send_hex(uint64_t value)
 {
     const char hex_chars[] = "0123456789ABCDEF";
     // Send each nibble (4 bits) as a hex character
-    for (int i = 28; i >= 0; i -= 4)
+    for (int i = 60; i >= 0; i -= 4)
     {
         uart_send(hex_chars[(value >> i) & 0xF]);
     }

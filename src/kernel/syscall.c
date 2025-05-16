@@ -24,7 +24,7 @@ void handle_syscall(uint64_t kernel_sp) {
     uint64_t arg2 = frame->x2;
     // ... 可以讀取更多參數 ...
 
-    // uart_send_string("[Syscall Entry] SYSCALL_NUM="); uart_send_hex(syscall_number); uart_send_string("\r\n");
+    uart_send_string("[Syscall Entry] SYSCALL_NUM="); uart_send_int(syscall_number); uart_send_string("\r\n");
     should_run_task_queue = 0;
     switch (syscall_number) {
         // --- 延遲處理的系統呼叫 (放入 Task Queue) ---

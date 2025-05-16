@@ -68,7 +68,7 @@ void uart_disable_rx_interrupt();
 void uart_send(char c);
 char uart_recv();
 void uart_send_string(const char *str);
-void uart_send_hex(uint32_t value);
+void uart_send_hex(uint64_t value);
 void uart_send_int(int value);
 
 #endif // UART_H

@@ -96,18 +96,6 @@ char *strcpy(char *dest, const char *src)
     return dest;
 }
 
-// 記憶體設置
-void *memset(void *s, int c, size_t n)
-{
-    unsigned char *p = s;
-
-    while (n--)
-    {
-        *p++ = (unsigned char)c;
-    }
-
-    return s;
-}
 
 char *int2str(int num, char *str)
 {
@@ -273,4 +261,15 @@ int atoi(const char *str)
     }
 
     return sign * result;
+}
+//lab6(mmu.c)
+void* memset(void *s, int c, size_t n) {
+    unsigned char *p = (unsigned char *)s; // 將指標轉換為 unsigned char* 以便逐位元組操作
+
+    // 迴圈 n 次，將每個位元組設定為 c
+    for (size_t i = 0; i < n; i++) {
+        p[i] = (unsigned char)c;
+    }
+
+    return s; // 返回原始指標
 }

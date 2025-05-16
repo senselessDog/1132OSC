@@ -73,7 +73,7 @@ void bootloader_main(void *dtb_addr)
 {
     uart_init();
     uart_send_string("[bootloader_main] dtb address: \r\n");
-    uart_send_hex((uint32_t)dtb_addr);
+    uart_send_hex((uint64_t)dtb_addr);
     uart_send_string("\r\n");
     uart_send_string("[bootloader_main] start bootloader!\r\n");
     while (1)

@@ -4,13 +4,8 @@
 #include "gpu_interrupt.h"
 #include "task_queue.h"
 #include "thread.h"
-void uart_init();
-void uart_send_string(const char *str);
-char uart_recv();
-void uart_send(char c);
 void get_board_revision();
 void get_arm_memory();
-void uart_send_hex(uint32_t value);
 // lab2
 void reset(int tick);
 void parse_cpio_archive(char *archive);
@@ -169,7 +164,8 @@ void shell()
             else if (strcmp(argv[0], "run") == 0)
             {
                 uart_send_string("run user program on EL0\r\n");
-                run_user((char *)g_initramfs_addr);
+                // run_user((char *)g_initramfs_addr);
+                run_user_vm((char *)g_initramfs_addr);
             }
             else if (strcmp(argv[0], "async_io") == 0)
             {

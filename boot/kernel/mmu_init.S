@@ -1,3 +1,5 @@
+#include<mmu.h>
+
 // Arguments:
 //   write_to_reg: Register holding the address where the descriptor is to be written
 //   phys_addr_reg_or_imm: Register or immediate value for the physical base address component of the descriptor
@@ -9,42 +11,6 @@
   orr x2, x1, x2
   str x2, [x0]
 .endm
-
-//TCR
-#define TCR_CONFIG_REGION_48bit (((64-48) << 0) | ((64-48) << 16))
-#define TCR_CONFIG_4KB ((0b00 << 14) | (0b10 << 30)) // TG0=4KB, TG1=4KB
-#define TCR_CONFIG_DEFAULT (TCR_CONFIG_REGION_48bit | TCR_CONFIG_4KB)
-
-//MAIR mode
-#define MAIR_DEVICE_nGnRnE      0b00000000
-#define MAIR_NORMAL_NOCACHE     0b01000100 // Normal, Inner/Outer Non-Cacheable
-#define MAIR_IDX_DEVICE_nGnRnE  0
-#define MAIR_IDX_NORMAL_NOCACHE 1
-
-//attributes setting
-#define PD_TABLE 0b11
-#define PD_BLOCK 0b01 // For PUD block entries, bits[1:0] = 01 (Block entry)
-                      // Bit[0] is 1 for Block/Page, Bit[1] is 0 for Block.
-#define PD_ACCESS (1 << 10) // Access flag
-
-// PGD attributes：指向下一級 Table
-#define PGD_TABLE_ATTR PD_TABLE // Basic table descriptor
-
-// PUD attribute：Block, Access, MAIR index for Device_nGnRnE
-// MAIR index (bits 4:2)
-#define PUD_TABLE_ATTR PD_TABLE
-#define PUD_DEVICE_BLOCK_ATTR (PD_ACCESS | (MAIR_IDX_DEVICE_nGnRnE << 2) | PD_BLOCK)
-
-// PMD attributes
-// Attributes for PMD 2MB block descriptors
-#define PMD_NORMAL_BLOCK_ATTR (PD_ACCESS | (MAIR_IDX_NORMAL_NOCACHE << 2) | PD_BLOCK)
-#define PMD_DEVICE_BLOCK_ATTR (PD_ACCESS | (MAIR_IDX_DEVICE_nGnRnE << 2) | PD_BLOCK)
-//PMD_size
-#define PMD_BLOCK_SIZE 0x200000
-// 為了 Identity Paging 和 Kernel Space Mapping，我們需要一些空間放 PGD 和 PUD
-#define PGD_BASE_PHYS 0x0
-#define PUD_BASE_PHYS 0x1000
-#define PMD_BASE_PHYS 0x2000
 
 .global mmu_setup
 mmu_setup:
@@ -59,6 +25,7 @@ mmu_setup:
     // 3. Setup Identity Paging Page Tables (PGD and PUD)
     mov x5, PGD_BASE_PHYS 
     mov x6, PUD_BASE_PHYS
+    mov x7, PMD_BASE_PHYS
 
     // 清理 PGD 和 PUD 頁框 (假設它們是 4KB 大小，初始化為0代表無效entry)
 

@@ -693,7 +693,9 @@ void reserve_system_memory(void) {
         uart_send_hex((uint32_t)(g_fdt_addr + dtb_size));
         uart_send_string("\r\n");
     }
-    
+    // for mmu_init PMD 0x0000~0x2000
+    uart_send_string("[reserve_memory] Reserved init page table\r\n");
+    memory_reserve((uint32_t)0x0000, (uint32_t)0x3000);
     
     // Reserve simple allocator - you'll need to define where it is located
     // This depends on your implementation

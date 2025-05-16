@@ -34,16 +34,19 @@ void el0_core_timer_enable(void)
     asm volatile("mrs %0, cntfrq_el0" : "=r"(timer_freq));
     uint64_t timeout=timer_freq>>5;
     asm volatile("msr cntp_tval_el0, %0" : : "r"(timeout));
-
+    
+    // unmask timer interrupt
     // mov x0, 2
     // ldr x1, =CORE0_TIMER_IRQ_CTRL
-    // str w0, [x1] // unmask timer interrupt
+    // str w0, [x1] 
     uint32_t *ctrl_reg = (volatile uint32_t *)CORE0_TIMER_IRQ_CTRL;
     *ctrl_reg = 2;
+    //Enable timer access for EL0
     uint64_t tmp;
     asm volatile("mrs %0, cntkctl_el1" : "=r"(tmp));
-    tmp |= 1;
+    tmp |= 1;// Allow EL0 to access physical timer
     asm volatile("msr cntkctl_el1, %0" : : "r"(tmp));
+    //enable time interrupt
     asm volatile("mov x0, #1");
     asm volatile("msr cntp_ctl_el0, x0");
     
@@ -51,7 +54,7 @@ void el0_core_timer_enable(void)
 void switch_to_el0(void *start_addr, void *stack_ptr)
 {
     // perpare for this function
-    el0_core_timer_enable();
+    // el0_core_timer_enable();
     uart_send_string("switch_to_el0\r\n");
     uart_send_string("start_addr: ");
     uart_send_hex(start_addr);

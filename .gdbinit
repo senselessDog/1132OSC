@@ -18,10 +18,16 @@ define kernel
   # b sigreturn_trampoline_entry
   # b sys_sigreturn
   #b mmu_setup
-  b *0x80000
-  b _start
+  # b *0x80000
+  # b _start
+  # b mmu_init.S:62
+  b mappages
+  # b walk_and_create_pte
+  b switch_to_el0_vm
+  b *0x0
+  b sync_lower_el_64_entry
+  b handle_syscall
   #b simple_alloc
-  b *0xffff000000080000
   # b user_thread_schedule
   # b el0_core_timer_enable
   # b lower_el_irq_entry
