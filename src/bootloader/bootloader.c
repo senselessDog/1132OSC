@@ -1,11 +1,7 @@
 #include <stdint.h>
 #include <string.h>
 
-void uart_init();
-void uart_send_string(const char *str);
-void uart_send_hex(uint32_t value);
-char uart_recv();
-void uart_send(char c);
+#include"bootloader/uart.h"
 
 #define KERNEL_LOAD_ADDRESS 0x80000
 #define HEADER_MAGIC 0x544F4F42 // "BOOT" in hex

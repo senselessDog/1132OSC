@@ -1,9 +1,9 @@
 #include "buddy_alloc.h"
 #include "uart.h"
 #include "devicetree.h"
-
+#include "alloc.h"
 // Define the global variables
-uint32_t _kernel_start = 0x80000;
+// uint32_t _kernel_start = 0x80000;
 buddy_system_t* buddy_system = NULL;
 const size_t POOL_SIZES[NUM_POOLS] = {16, 32, 64, 128, 256, 512, 1024, 2048};
 block_header_t* free_lists[NUM_POOLS];
@@ -33,6 +33,7 @@ void buddy_init(void) {
     uint32_t memory_size = BUDDY_MEMORY_END - BUDDY_MEMORY_START;
     uint32_t total_pages = memory_size / PAGE_SIZE;
     
+
     // Allocate space for buddy system metadata
     buddy_system = (buddy_system_t*)simple_alloc(sizeof(buddy_system_t));
     
@@ -76,7 +77,7 @@ void buddy_init(void) {
             }
         }
         uart_send_string("Buddy system simple_allocated to ");
-        uart_send_hex((uint32_t)buddy_system->list_addr[order]);
+        uart_send_hex((uint64_t)buddy_system->list_addr[order]);
     }
     
     
@@ -158,7 +159,12 @@ void buddy_split(int order, int start_idx, int requested_order) {
     buddy_block_list_t* last = &buddy_system->buddy_list[child_order][left_child_idx];
     buddy_system->buddy_list[child_order][right_child_idx].next = last->next;
     buddy_system->buddy_list[child_order][right_child_idx].prev = last;
-    last->next->prev = &buddy_system->buddy_list[child_order][right_child_idx];
+    // uart_send_string("[buddy_split] last="); uart_send_hex((uint64_t)last);uart_send_string("\r\n");
+    // uart_send_string("last->next="); uart_send_hex((uint64_t)last->next);uart_send_string("\r\n");
+    // uart_send_string("last->next->prev="); uart_send_hex((uint64_t)last->next->prev);uart_send_string("\r\n");
+    if (last->next){
+        last->next->prev = &buddy_system->buddy_list[child_order][right_child_idx];
+    }
     last->next = &buddy_system->buddy_list[child_order][right_child_idx];
     return;
 }
@@ -287,10 +293,10 @@ void* buddy_malloc(size_t size) {
     // uart_send_int(buddy_system->first_avail[order]);
     // uart_send_string("\r\n");
     // Calculate the physical address
-    void* addr = (void*)((uint32_t)buddy_system->memory_start + block_idx * (1 << order) * PAGE_SIZE);
+    void* addr = (void*)(buddy_system->memory_start + block_idx * (1 << order) * PAGE_SIZE);
     //printf("Allocated memory at 0x%x (order %d, index %d)\n", (uint32_t)addr, order, block_idx);
     uart_send_string("Allocated memory at 0x");
-    uart_send_hex((uint32_t)addr);
+    uart_send_hex((uint64_t)addr);
     uart_send_string(" (order ");
     uart_send_int(order);
     uart_send_string(", index ");
@@ -308,22 +314,22 @@ void buddy_free(void* addr) {
     }
     
     // Check if the address is within our memory range
-    if ((uint32_t)addr < (uint32_t)buddy_system->memory_start || 
-        (uint32_t)addr >= (uint32_t)buddy_system->memory_start + buddy_system->total_pages * PAGE_SIZE) {
+    if (addr < buddy_system->memory_start || 
+        addr >= buddy_system->memory_start + buddy_system->total_pages * PAGE_SIZE) {
         //printf("Invalid address to free: 0x%x\n", (uint32_t)addr);
         uart_send_string("Invalid address to free: 0x");
-        uart_send_hex((uint32_t)addr);
+        uart_send_hex((uint64_t)addr);
         uart_send_string("\r\n");
         return;
     }
     
     // Calculate the page index
-    uint32_t offset = (uint32_t)addr - (uint32_t)buddy_system->memory_start;
-    uint32_t page_idx = offset / PAGE_SIZE;
+    uint64_t offset = addr - buddy_system->memory_start;
+    uint64_t page_idx = offset / PAGE_SIZE;
     
     //printf("Freeing memory at 0x%x (page index %u)\n", (uint32_t)addr, page_idx);
     uart_send_string("Freeing memory at 0x");
-    uart_send_hex((uint32_t)addr);
+    uart_send_hex((uint64_t)addr);
     uart_send_string(" (page index ");
     uart_send_int(page_idx);
     uart_send_string(")\r\n");
@@ -344,7 +350,7 @@ void buddy_free(void* addr) {
     if (order >= MAX_ORDER) {
         //printf("Block not found for address 0x%x\n", (uint32_t)addr);
         uart_send_string("Block not found for address 0x");
-        uart_send_hex((uint32_t)addr);
+        uart_send_hex((uint64_t)addr);
         uart_send_string("\r\n");
         return;
     }
@@ -402,8 +408,8 @@ void buddy_free(void* addr) {
                 // uart_send_string("\r\n");
         } else {
             // Find block in the list
-            buddy_block_list_t* prev = &buddy_system->buddy_list[order][block_idx].prev;
-            buddy_block_list_t* next = &buddy_system->buddy_list[order][block_idx].next;
+            buddy_block_list_t* prev = buddy_system->buddy_list[order][block_idx].prev;
+            buddy_block_list_t* next = buddy_system->buddy_list[order][block_idx].next;
             prev->next = buddy_system->buddy_list[order][block_idx].next;
             if (next != NULL) {
                 next->prev = buddy_system->buddy_list[order][block_idx].prev;
@@ -422,8 +428,8 @@ void buddy_free(void* addr) {
             }
         } else {
             // Find buddy in the list
-            buddy_block_list_t* prev = &buddy_system->buddy_list[order][buddy_idx].prev;
-            buddy_block_list_t* next = &buddy_system->buddy_list[order][buddy_idx].next;
+            buddy_block_list_t* prev = buddy_system->buddy_list[order][buddy_idx].prev;
+            buddy_block_list_t* next = buddy_system->buddy_list[order][buddy_idx].next;
             prev->next = buddy_system->buddy_list[order][buddy_idx].next;
             if (next != NULL) {
                 next->prev = buddy_system->buddy_list[order][buddy_idx].prev;
@@ -503,7 +509,7 @@ void* dynamic_malloc(size_t size) {
         int blocks_per_page = PAGE_SIZE / block_size;
         
         // Update page tracking
-        int page_index = ((int)(new_page - BUDDY_MEMORY_START)) / PAGE_SIZE;
+        uint64_t page_index = ((uint64_t)(new_page - buddy_system->memory_start)) / PAGE_SIZE;
         pool_page_addr[page_index] = pool_index;
         
         // Split the page into blocks and add to free list
@@ -540,12 +546,13 @@ void* dynamic_malloc(size_t size) {
     // The block_header could be saved somewhere for later use in free
     // Or simply create a new one during free operation
     
-    // uart_send_string("Small allocation: requested ");
+    // uart_send_string("[dynamic_malloc]Small allocation: requested ");
     // uart_send_int(size);
     // uart_send_string(" bytes, allocated ");
     // uart_send_int(POOL_SIZES[pool_index]);
+    // uart_send_string("\r\n");
     // uart_send_string(" bytes at address 0x");
-    // uart_send_hex((uint32_t)allocated_memory);
+    // uart_send_hex((uint64_t)allocated_memory);
     // uart_send_string("\r\n");
     
     return allocated_memory;
@@ -556,8 +563,8 @@ void dynamic_free(void* ptr) {
     if (ptr == NULL) return;
     
     // Calculate which page this address belongs to
-    uint32_t addr = (uint32_t)ptr;
-    int page_index = (addr - BUDDY_MEMORY_START) / PAGE_SIZE;
+    uint64_t addr = (uint64_t)ptr;
+    int page_index = (addr - (uint64_t)buddy_system->memory_start) / PAGE_SIZE;
     if (page_index < 0 && page_index >= (BUDDY_MEMORY_END/PAGE_SIZE)){
         uart_send_string("Invalid address to free: 0x");
         uart_send_hex(addr);
@@ -592,10 +599,10 @@ void dynamic_free(void* ptr) {
     }
 }
 
-void memory_reserve(uint32_t start, uint32_t end) {
+void memory_reserve(uint64_t start, uint64_t end) {
     // 計算起始和結束的區塊索引
-    uint32_t start_idx = (start - (uint32_t)buddy_system->memory_start) / PAGE_SIZE;
-    uint32_t end_idx = (end - (uint32_t)buddy_system->memory_start-1) / PAGE_SIZE;
+    uint32_t start_idx = (start - (uint64_t)buddy_system->memory_start) / PAGE_SIZE;
+    uint32_t end_idx = (end - (uint64_t)buddy_system->memory_start-1) / PAGE_SIZE;
     // 檢查是否為無效請求
     if (end_idx < start_idx) {
         uart_send_string("Invalid memory reserve request\r\n");
@@ -608,7 +615,7 @@ void memory_reserve(uint32_t start, uint32_t end) {
     uart_send_string("\r\n");
 
     // 從最底層頁面開始處理
-    for (uint32_t i = start_idx; i <= end_idx; i++) {
+    for (uint64_t i = start_idx; i <= end_idx; i++) {
         int target_order = 0;
         int target_idx = i;
         
@@ -664,38 +671,40 @@ void reserve_system_memory(void) {
     
     // Now reserve all regions
     // Reserve spin tables
-    memory_reserve((uint32_t)0x0000, (uint32_t)0x1000);
+    memory_reserve((uint64_t)0xffff000000000000, (uint64_t)0xffff000000001000);
     // Reserve kernel image
-    uint32_t kernel_end_addr = (uint32_t)&_kernel_end;
+    uint64_t kernel_start_addr =(uint64_t)&_kernel_virtual_start;
+    uint64_t kernel_end_addr = (uint64_t)&_kernel_end;
 
-    memory_reserve((uint32_t)_kernel_start, (uint32_t)kernel_end_addr);
+    memory_reserve((uint64_t)kernel_start_addr, (uint64_t)kernel_end_addr);
     uart_send_string("[reserve_memory] Kernel start: 0x");
-    uart_send_hex(_kernel_start);
+    uart_send_hex(kernel_start_addr);
     uart_send_string(" - 0x");
     uart_send_hex(kernel_end_addr); 
     uart_send_string("\r\n");
     
     // Reserve initramfs
-    memory_reserve((uint32_t)g_initramfs_addr, (uint32_t)g_initramfs_end_addr);
+    memory_reserve((uint64_t)g_initramfs_addr, (uint64_t)g_initramfs_end_addr);
     uart_send_string("[reserve_memory] Initramfs start: 0x");
-    uart_send_hex((uint32_t)g_initramfs_addr);
+    uart_send_hex((uint64_t)g_initramfs_addr);
     uart_send_string(" - 0x");
-    uart_send_hex((uint32_t)(g_initramfs_end_addr)); 
+    uart_send_hex((uint64_t)(g_initramfs_end_addr)); 
     uart_send_string("\r\n");
     if (g_fdt_addr) {
         struct fdt_header *header = (struct fdt_header *)g_fdt_addr;
-        uint32_t dtb_size = (uint32_t)fdt32_to_cpu(header->totalsize);
+        uint64_t dtb_size = (uint64_t)fdt32_to_cpu(header->totalsize);
         // Reserve devicetree
-        memory_reserve((uint32_t)g_fdt_addr, (uint32_t)(g_fdt_addr + dtb_size));
+        memory_reserve((uint64_t)g_fdt_addr, (uint64_t)(g_fdt_addr + dtb_size));
         uart_send_string("[reserve_memory] Reserved devicetree: 0x");
-        uart_send_hex((uint32_t)g_fdt_addr);
+        uart_send_hex((uint64_t)g_fdt_addr);
         uart_send_string(" - 0x");
-        uart_send_hex((uint32_t)(g_fdt_addr + dtb_size));
+        uart_send_hex((uint64_t)(g_fdt_addr + dtb_size));
         uart_send_string("\r\n");
     }
-    // for mmu_init PMD 0x0000~0x2000
+    // for mmu_init PMD 0x0000~0x3000
     uart_send_string("[reserve_memory] Reserved init page table\r\n");
-    memory_reserve((uint32_t)0x0000, (uint32_t)0x3000);
+    memory_reserve((uint64_t)0xffff000000000000, (uint64_t)0xffff000000003000);
+    // fpr user stack
     
     // Reserve simple allocator - you'll need to define where it is located
     // This depends on your implementation

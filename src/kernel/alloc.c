@@ -1,8 +1,7 @@
 #include <stdint.h>
 #include <string.h>
-void uart_send_string(const char *str);
-extern char __heap_start;
-extern char __heap_end;
+#include "alloc.h"
+#include "uart.h"
 
 static char *heap = &__heap_start;
 static size_t heap_size;

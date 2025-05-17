@@ -5,6 +5,7 @@
 #include "task_queue.h"
 #include "syscall.h"
 #include "thread.h"
+#include "alloc.h"
 #define MMIO_BASE 0x3F000000
 #define IRQ_PENDING1 ((volatile uint32_t *)(MMIO_BASE + 0x0000B204))
 void display_timer_info(void *arg);
@@ -161,4 +162,88 @@ void lower_el_irq_entry(uint64_t frame_sp)
         // asm volatile("mov x0, #1");
         // asm volatile("msr cntp_ctl_el0, x0");
     }
+}
+
+void print_esr_el1_details(uint64_t esr_el1) {
+    uint32_t ec = (esr_el1 >> 26) & 0x3F; // Bits 31:26
+    uint32_t il = (esr_el1 >> 25) & 0x1;  // Bit 25
+    uint32_t iss = esr_el1 & 0x1FFFFFF;  // Bits 24:0
+
+    uart_send_string("ESR_EL1 Details:\r\n");
+    uart_send_string("  Raw ESR_EL1: 0x"); uart_send_hex(esr_el1); uart_send_string("\r\n");
+    uart_send_string("  Exception Class (EC): 0x"); uart_send_hex(ec); uart_send_string(" (");
+
+    switch (ec) {
+        case 0b000000: uart_send_string("Unknown reason"); break;
+        case 0b000001: uart_send_string("Trapped WFI or WFE"); break;
+        // ... many other EC values for MCR/MRC, SIMD, etc.
+        case 0b010101: uart_send_string("SVC instruction execution in AArch64 state"); break;
+        case 0b100000: uart_send_string("Instruction Abort from lower EL (AArch32)"); break;
+        case 0b100001: uart_send_string("Instruction Abort from lower EL (AArch64)"); break;
+        case 0b100010: uart_send_string("PC alignment fault"); break;
+        case 0b100100: uart_send_string("Data Abort from current EL (EL1)"); break;
+        case 0b100101: uart_send_string("Data Abort from lower EL (EL0)"); break;
+        case 0b100110: uart_send_string("SP alignment fault"); break;
+        // ... other EC values
+        case 0b110000: uart_send_string("Breakpoint exception from lower EL (AArch32)"); break;
+        case 0b110001: uart_send_string("Breakpoint exception from lower EL (AArch64)"); break;
+        case 0b110010: uart_send_string("Software Step from lower EL (AArch32)"); break;
+        case 0b110011: uart_send_string("Software Step from lower EL (AArch64)"); break;
+        case 0b110100: uart_send_string("Watchpoint from lower EL (AArch32)"); break;
+        case 0b110101: uart_send_string("Watchpoint from lower EL (AArch64)"); break;
+        case 0b111000: uart_send_string("BKPT instruction execution (AArch32)"); break;
+        case 0b111100: uart_send_string("BRK instruction execution (AArch64)"); break;
+        default: uart_send_string("Unlisted EC"); break;
+    }
+    uart_send_string(")\r\n");
+    // uart_send_string("  Instruction Length (IL): "); uart_send_hex(il); uart_send_string(il ? " (32-bit)\r\n" : " (16-bit or N/A)\r\n");
+    // uart_send_string("  Instruction Specific Syndrome (ISS): 0x"); uart_send_hex(iss); uart_send_string("\r\n");
+
+    // // If it's a Data Abort (from current or lower EL)
+    // if (ec == 0b100100 || ec == 0b100101) {
+    //     uint32_t dfsc = iss & 0x3F;      // Bits 5:0 - Data Fault Status Code
+    //     uint32_t wnr  = (iss >> 6) & 0x1; // Bit 6 - Write not Read
+
+    //     uart_send_string("    Data Abort Details:\r\n");
+    //     uart_send_string("      Write (1) / Read (0) operation: "); uart_send_hex(wnr); uart_send_string("\r\n");
+    //     uart_send_string("      Data Fault Status Code (DFSC): 0x"); uart_send_hex(dfsc); uart_send_string(" (");
+    //     switch (dfsc) {
+    //         case 0b000000: uart_send_string("Address size fault, level 0"); break;
+    //         case 0b000001: uart_send_string("Address size fault, level 1"); break;
+    //         case 0b000010: uart_send_string("Address size fault, level 2"); break;
+    //         case 0b000011: uart_send_string("Address size fault, level 3"); break;
+    //         case 0b000100: uart_send_string("Translation fault, level 0"); break;
+    //         case 0b000101: uart_send_string("Translation fault, level 1"); break;
+    //         case 0b000110: uart_send_string("Translation fault, level 2"); break;
+    //         case 0b000111: uart_send_string("Translation fault, level 3"); break;
+    //         case 0b001001: uart_send_string("Access flag fault, level 1"); break;
+    //         case 0b001010: uart_send_string("Access flag fault, level 2"); break;
+    //         case 0b001011: uart_send_string("Access flag fault, level 3"); break;
+    //         case 0b001101: uart_send_string("Permission fault, level 1"); break;
+    //         case 0b001110: uart_send_string("Permission fault, level 2"); break;
+    //         case 0b001111: uart_send_string("Permission fault, level 3"); break;
+    //         // Add more DFSC codes as needed from ARM ARM
+    //         case 0b100001: uart_send_string("Alignment fault"); break;
+    //         case 0b110001: uart_send_string("TLB conflict abort"); break;
+    //         default: uart_send_string("Unlisted DFSC or other fault type"); break;
+    //     }
+    //     uart_send_string(")\r\n");
+    //     // You can decode other ISS bits here if needed (e.g., S1PTW, CM, EA, FnV)
+    // }
+}
+
+// 在你的 default_handler_entry 中呼叫:
+void default_handler_entry(void){
+    uint64_t esr, far;
+    asm volatile("mrs %0, esr_el1": "=r"(esr));
+    asm volatile("mrs %0, far_el1": "=r"(far));
+
+    uart_send_string("\r\n--- EXCEPTION CAUGHT ---\r\n");
+    print_esr_el1_details(esr); // 呼叫新的解析函數
+    uart_send_string("\r\nFault Address Register (FAR_EL1): 0x");
+    uart_send_hex(far);
+    uart_send_string("\r\n------------------------\r\n");
+
+    // Loop indefinitely to halt
+    // while(1); // Or your preferred halt mechanism
 }

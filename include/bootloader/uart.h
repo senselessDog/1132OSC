@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 // MMIO base address for peripherals
-#define MMIO_BASE 0xFFFF00003F000000
+#define MMIO_BASE 0x3F000000
 
 
 // GPIO Function Select 1
@@ -60,6 +60,7 @@ int uart_async_send(char c);
 void uart_async_send_string(const char *str);
 int uart_async_recv(char *c);
 
+void uart_init();
 void uart_enable_interrupt();
 int is_gpu_interrupt();
 void uart_enable_tx_interrupt();

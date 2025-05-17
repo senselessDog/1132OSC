@@ -1,7 +1,6 @@
 #include "uart.h"
-#include <stdint.h>
-#include <string.h>
 #include <stdio.h>
+#include "strcmp.h"
 void async_io_test()
 {
     char buffer[256] = {0};

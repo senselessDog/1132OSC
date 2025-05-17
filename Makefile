@@ -25,7 +25,7 @@ KERNEL_SRCS = $(wildcard src/kernel/*.c) $(wildcard src/kernel/*.S) $(wildcard s
 # lab3: kernel/run_userprogram.c kernel/exception_entry.c boot/exception.S \
 # 		kernel/async_io.c kernel/gpu_interrupt.c kernel/timeout.c kernel/task_queue.c
 
-BOOTLOADER_SRCS = $(wildcard src/bootloader/*.c) $(wildcard src/lib/*.c) $(wildcard boot/bootloader/*.S)
+BOOTLOADER_SRCS = $(wildcard src/bootloader/*.c) $(wildcard boot/bootloader/*.S)
 # boot/bootloader.S lib/uart.c lib/strcmp.c
 # Define object files
 KERNEL_OBJS = $(KERNEL_SRCS:.S=.o)
@@ -69,7 +69,7 @@ clean:
 	find . -name "*.o" -type f -delete
 
 qemu:
-	qemu-system-aarch64 -machine raspi3b -kernel bootloader.img -nographic -serial null -serial pty -initrd initramfs.cpio -dtb bcm2710-rpi-3-b-plus.dtb -S -s
+	qemu-system-aarch64 -machine raspi3b -kernel script/kernel8.img -nographic -serial null -serial pty -initrd initramfs.cpio -dtb bcm2710-rpi-3-b-plus.dtb -S -s
 qemu_video:
 	~/lab/qemu/build/qemu-system-aarch64 \
 	-machine raspi3b \

@@ -2,6 +2,7 @@
 #define NULL ((void *)0)
 #endif
 #include "task_queue.h"
+#include "alloc.h"
 #include <stdint.h>
 // Global task queue
 task_queue_t global_task_queue;

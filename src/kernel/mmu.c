@@ -17,7 +17,7 @@ uint64_t* walk_and_create_pte(uint64_t pgd_phys, uint64_t va, int alloc) {
     entry_phys_ptr = &current_table_phys[va_to_index(va, PGD_SHIFT)];
     if (!(*entry_phys_ptr & PD_TABLE)) { // Check if valid table descriptor
         if (!alloc) return NULL;
-        next_table_base_phys = (uint64_t)dynamic_malloc(4096);
+        next_table_base_phys = (uint64_t)(dynamic_malloc(4096)-kernel_virtual_offset);
         if (!next_table_base_phys) return NULL; // Allocation failed
         memset((void*)next_table_base_phys, 0, PAGE_SIZE);
         *entry_phys_ptr = next_table_base_phys | PD_TABLE;
@@ -28,7 +28,7 @@ uint64_t* walk_and_create_pte(uint64_t pgd_phys, uint64_t va, int alloc) {
     entry_phys_ptr = &current_table_phys[va_to_index(va, PUD_SHIFT)];
     if (!(*entry_phys_ptr & PD_TABLE)) {
         if (!alloc) return NULL;
-        next_table_base_phys = (uint64_t)dynamic_malloc(4096);
+        next_table_base_phys = (uint64_t)(dynamic_malloc(4096)-kernel_virtual_offset);
         if (!next_table_base_phys) return NULL;
         memset((void*)next_table_base_phys, 0, PAGE_SIZE);
         *entry_phys_ptr = next_table_base_phys | PD_TABLE;
@@ -39,7 +39,7 @@ uint64_t* walk_and_create_pte(uint64_t pgd_phys, uint64_t va, int alloc) {
     entry_phys_ptr = &current_table_phys[va_to_index(va, PMD_SHIFT)];
     if (!(*entry_phys_ptr & PD_TABLE)) {
         if (!alloc) return NULL;
-        next_table_base_phys = (uint64_t)dynamic_malloc(4096);
+        next_table_base_phys = (uint64_t)(dynamic_malloc(4096)-kernel_virtual_offset);
         if (!next_table_base_phys) return NULL;
         memset((void*)next_table_base_phys, 0, PAGE_SIZE);
         *entry_phys_ptr = next_table_base_phys | PD_TABLE;
@@ -100,7 +100,7 @@ void switch_to_el0_vm(uint64_t user_pgd_phys, void *start_va, void *stack_top_va
     // 1. Set TTBR0_EL1 to the user's PGD physical address
     asm volatile("dsb ish"); 
     asm volatile("msr ttbr0_el1, %0" :: "r"(user_pgd_phys));
-    uart_send_string("[switch_to_el0_vm]Testttbr0_el1\r\n");
+    
     // 2. Invalidate all TLB entries for the current VMID (or all if ASID not used)
     //    This ensures old translations are flushed.
     asm volatile("dsb ish");    // Ensure prior memory accesses complete
@@ -111,13 +111,13 @@ void switch_to_el0_vm(uint64_t user_pgd_phys, void *start_va, void *stack_top_va
     // 3. Prepare SPSR_EL1 and ELR_EL1 for eret
     // SPSR_EL1: Target EL0, AArch64, No interrupts masked (D,A,I,F = 0)
     uint64_t spsr_el0 = 0x0; // EL0t (using SP_EL0), AArch64, all interrupts unmasked
-    
     asm volatile(
         "msr spsr_el1, %0\n"  // Status to restore (EL0 mode)
         "msr elr_el1, %1\n"   // Exception Link Register (return address in EL0)
         "msr sp_el0, %2\n"    // Stack Pointer for EL0
         : : "r"(spsr_el0), "r"(start_va), "r"(stack_top_va)
     );
+    uart_send_string("[switch_to_el0_vm]Test_ttbr0_el1\r\n");
     asm volatile("eret\n");
 }
 
@@ -173,7 +173,8 @@ void run_user_vm(char *archive_phys_addr) {
 
 
     // 1. Allocate PGD for the new user address space
-    uint64_t user_pgd_phys = (uint64_t)dynamic_malloc(4096);
+    uint64_t user_pgd_virtual = (uint64_t)dynamic_malloc(4096);
+    uint64_t user_pgd_phys=(uint64_t)(user_pgd_virtual-kernel_virtual_offset);
     if (!user_pgd_phys) {
         uart_send_string("Error:[run_user_vm] Failed to allocate PGD for user space!\r\n");
         return;
@@ -190,7 +191,7 @@ void run_user_vm(char *archive_phys_addr) {
     void *user_stack=user_base+user_space_size;
     
     memcpy(user_base,(const void *)program_info.filecontext, (uint32_t)program_info.filesize);
-    if (mappages(user_pgd_phys, USER_CODE_VA, (uint64_t)user_space_size, (uint64_t)user_base, USER_CODE_ATTR) != 0) {
+    if (mappages(user_pgd_phys, USER_CODE_VA, (uint64_t)user_space_size, (uint64_t)user_base-kernel_virtual_offset, USER_CODE_ATTR) != 0) {
         uart_send_string("[run_user_vm] Failed to map user code!\r\n");
         // Potentially free PGD and other allocated tables here
         return;
@@ -211,7 +212,7 @@ void run_user_vm(char *archive_phys_addr) {
         // Map this single page
         // Stack grows downwards, so USER_STACK_BOTTOM_VA is the start of the VA range.
         // We map pa_pages[0] to USER_STACK_BOTTOM_VA, pa_pages[1] to USER_STACK_BOTTOM_VA + PAGE_SIZE, etc.
-    if (mappages(user_pgd_phys, USER_STACK_BOTTOM_VA, PAGE_SIZE*4, user_stack_pa_pages, USER_DATA_STACK_ATTR) != 0) {
+    if (mappages(user_pgd_phys, USER_STACK_BOTTOM_VA, PAGE_SIZE*4, user_stack_pa_pages-kernel_virtual_offset, USER_DATA_STACK_ATTR) != 0) {
         uart_send_string("Error: [run_user_vm]Failed to map user stack page!\r\n");
         // Potentially free PGD and other allocated tables/pages here
         return;

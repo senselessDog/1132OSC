@@ -1,6 +1,7 @@
 #ifndef MMU_H_GUARD // 防止重複包含的標準做法
 #define MMU_H_GUARD
-
+//virtual physic offset for kernel
+#define kernel_virtual_offset 0xffff000000000000
 //TCR
 #define TCR_CONFIG_REGION_48bit (((64-48) << 0) | ((64-48) << 16))
 #define TCR_CONFIG_4KB ((0b00 << 14) | (0b10 << 30)) // TG0=4KB, TG1=4KB

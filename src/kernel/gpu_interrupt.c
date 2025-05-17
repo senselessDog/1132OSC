@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include "uart.h"
 #include "task_queue.h"
+#include "alloc.h"
 #ifndef NULL
 #define NULL ((void *)0)
 #endif

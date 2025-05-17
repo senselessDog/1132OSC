@@ -4,6 +4,7 @@
 #include "gpu_interrupt.h"
 #include "task_queue.h"
 #include "thread.h"
+#include "alloc.h"
 void get_board_revision();
 void get_arm_memory();
 // lab2
@@ -11,15 +12,14 @@ void reset(int tick);
 void parse_cpio_archive(char *archive);
 void list_cpio_files(const char *archive);
 void uart_send_int(int value);
-void *simple_alloc(size_t size);
 int fdt_init(void *fdt_addr);
 // lab3
 void *run_user(char *archive);
 void cmd_setTimeout(int argc, char **argv);
 void async_io_test();
 // 從 DTB 中獲取 initramfs 信息的全局變量
-extern uint32_t g_initramfs_addr;
-extern uint32_t g_initramfs_size;
+extern uint64_t g_initramfs_addr;
+extern uint64_t g_initramfs_size;
 // 從 DTB 中獲取 initramfs 信息的函數
 int get_initramfs_info(void *dtb_addr);
 /**

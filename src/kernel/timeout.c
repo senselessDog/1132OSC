@@ -4,6 +4,7 @@
 #include "gpu_interrupt.h"
 #include "thread.h"
 #include "syscall.h"
+#include "alloc.h"
 void process_timer_tasks(void *arg);
 #ifndef NULL
 #define NULL ((void *)0)

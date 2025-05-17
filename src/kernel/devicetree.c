@@ -1,14 +1,15 @@
 // devicetree.c
 #include "devicetree.h"
+#include "mmu.h"
 #include <string.h>
 void uart_send_string(const char *str);
 void uart_send_hex(uint32_t value);
 // 保存 DTB 的地址
 void *g_fdt_addr = NULL;
 
-uint32_t g_initramfs_addr;
-uint32_t g_initramfs_size;
-uint32_t g_initramfs_end_addr;
+uint64_t g_initramfs_addr;
+uint64_t g_initramfs_size;
+uint64_t g_initramfs_end_addr;
 
 // 初始化 FDT 解析器
 int fdt_init(void *fdt_addr)
@@ -165,14 +166,14 @@ int initramfs_callback(const char *path, const char *name, const void *data, uin
         uart_send_hex(addr); // 將整數轉換為十六進制並打印
         uart_send_string("\r\n");
         uart_send_string("[callback] Found initramfs at address: \r\n");
-        g_initramfs_addr = (uint32_t)addr;
-        uart_send_hex((uint32_t)g_initramfs_addr);
+        g_initramfs_addr = (uint64_t)addr;
+        uart_send_hex((uint64_t)g_initramfs_addr);
         uart_send_string("\r\n");
         info->found = 1;
     }
     else if (strcmp(name, "linux,initrd-end") == 0)
     {
-        g_initramfs_end_addr = fdt32_to_cpu(*(uint32_t *)data);
+        g_initramfs_end_addr = (uint64_t)fdt32_to_cpu(*(uint32_t *)data);
         uart_send_string("[callback] Found initramfs end address: 0x");
         uart_send_hex(g_initramfs_end_addr);
         uart_send_string("\r\n");
@@ -191,12 +192,15 @@ int get_initramfs_info(void *dtb_addr)
         uart_send_string("[callback] Found initramfs end address: 0x");
         uart_send_hex(g_initramfs_end_addr);
         uart_send_string("\r\n");
-        g_initramfs_size = (uint32_t)(g_initramfs_end_addr - g_initramfs_addr);
+        g_initramfs_size = (uint64_t)(g_initramfs_end_addr - g_initramfs_addr);
         uart_send_string("[get_initramfs_info] Found initramfs at address: 0x");
-        uart_send_hex((uint32_t)g_initramfs_addr);
+        uart_send_hex((uint64_t)g_initramfs_addr);
         uart_send_string(" with size: 0x");
-        uart_send_hex((uint32_t)g_initramfs_size);
+        uart_send_hex((uint64_t)g_initramfs_size);
         uart_send_string("\r\n");
+
+        g_initramfs_addr+=kernel_virtual_offset;
+        g_initramfs_end_addr+=kernel_virtual_offset;
         return 0;
     }
     else

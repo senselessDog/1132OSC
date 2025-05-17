@@ -21,12 +21,17 @@ define kernel
   # b *0x80000
   # b _start
   # b mmu_init.S:62
-  b mappages
-  # b walk_and_create_pte
-  b switch_to_el0_vm
+  # b buddy_init
+  # b mappages
+  # # b walk_and_create_pte
+  # b switch_to_el0_vm
   b *0x0
-  b sync_lower_el_64_entry
+  # b sync_lower_el_64_entry
+  b buddy_init
+  b run_user_vm
   b handle_syscall
+  b syscall.c:35
+  b syscall.c:36
   #b simple_alloc
   # b user_thread_schedule
   # b el0_core_timer_enable
