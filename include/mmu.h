@@ -85,6 +85,8 @@
 #define USER_STACK_SIZE      (4 * PAGE_SIZE)     // 16KB
 #define USER_STACK_BOTTOM_VA 0xffffffffb000UL
 
+#define HANDLER_TOP_STACK 0xffffffffb000UL
+#define HANDLER_BOTTOM_STACK 0xffffffffa000UL
 #ifndef PHYS_TO_KVA
 #define PHYS_TO_KVA(pa) ((void*)((uint64_t)(pa) + kernel_virtual_offset))
 #endif

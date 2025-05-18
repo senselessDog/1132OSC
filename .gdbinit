@@ -37,10 +37,12 @@ define kernel
   # b lower_el_irq_entry
   # b thread.c:153
   # b thread.c:395
-  b sys_mbox_call
-  b map_framebuffer_for_user
-  b default_exception_handler
+  # b sys_mbox_call
+  # b map_framebuffer_for_user
+  # b default_exception_handler
   b find_thread_by_pid
+  b check_signals
+  b sys_sigreturn
   # b mmu.c:30
   #b simple_alloc
   # b user_thread_schedule

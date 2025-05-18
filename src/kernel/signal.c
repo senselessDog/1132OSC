@@ -1,5 +1,7 @@
 #include<thread.h>
 #include<syscall.h>
+#include "buddy_alloc.h"
+#include "mmu.h"
 int check_signals(trap_frame_t *frame) {
     thread_t *current = get_current();
     uint32_t pending_signals = current->sigpending;
@@ -90,15 +92,17 @@ int check_signals(trap_frame_t *frame) {
         // 4. 設定 user-mode handler 的堆疊指標 (sp_el0)
         //    您需要為 user-mode handler 準備一個堆疊。
         //    方案 A: 分配一個新的小塊記憶體作為 handler 的 user stack。
-        void * handler_stack = dynamic_malloc(Handler_STACK_SIZE);
-        current->handler_stack_ptr=handler_stack;
-        void * handler_fp= handler_stack+Handler_STACK_SIZE;
-        frame->sp_el0 = (uint64_t)handler_fp;
-
-        // spsr_el1 應該保持原樣，以返回到 user mode。
-
-        // uart_send_string("Kernel: Frame modified for user handler. ELR="); uart_send_hex(frame->elr_el1);
-        // uart_send_string(", User LR(x30)="); uart_send_hex(frame->x30); uart_send_string("\r\n");
+        void * handler_stack_kva = dynamic_malloc(Handler_STACK_SIZE);
+        current->handler_stack_ptr=handler_stack_kva;
+        uint64_t handler_stack_pa=(uint64_t)KVA_TO_PHYS(handler_stack_kva);
+        if (mappages(get_current_ttbr0_el1(),HANDLER_BOTTOM_STACK, PAGE_SIZE, handler_stack_pa,USER_DATA_STACK_ATTR)!=1){
+        uart_send_string("Error: [sys_mbox_call] Can't map framebuffer to VA\r\n");
+        return 0;
+        }
+        frame->sp_el0 = (uint64_t)HANDLER_TOP_STACK;
+        uart_send_string("[check_singals]Finish setting signal "); 
+        uart_send_int(signal_num); 
+        uart_send_string("\r\n");
 
         return 1; // 指示 frame 已修改，準備執行 user-mode handler
     }
