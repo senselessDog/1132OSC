@@ -24,10 +24,7 @@ typedef struct {
     //     uint64_t _pad[2]; // 强制占用 16 字节
     // };
     uint64_t spsr_el1, elr_el1; // 16 * 16
-    union {
-        uint64_t tpidr_el1;
-        uint64_t _pad[2];
-    };
+    uint64_t tpidr_el1, ttbr0_el1; // 16 * 17
 } trap_frame_t;
 
 typedef struct {

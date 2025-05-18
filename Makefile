@@ -69,11 +69,14 @@ clean:
 	find . -name "*.o" -type f -delete
 
 qemu:
-	qemu-system-aarch64 -machine raspi3b -kernel script/kernel8.img -nographic -serial null -serial pty -initrd initramfs.cpio -dtb bcm2710-rpi-3-b-plus.dtb -S -s
+	qemu-system-aarch64 -machine raspi3b -kernel script/kernel8.img -nographic -serial null -serial pty -initrd initramfs.cpio -dtb bcm2710-rpi-3-b-plus.dtb -S -s \
+	-display gtk \
+	-device usb-kbd \
+	-device usb-mouse
 qemu_video:
 	~/lab/qemu/build/qemu-system-aarch64 \
 	-machine raspi3b \
-	-kernel ~/lab/lab6/bootloader.img \
+	-kernel ~/lab/lab6/script/kernel8.img \
 	-initrd ~/lab/lab6/initramfs.cpio \
 	-dtb ~/lab/lab6/bcm2710-rpi-3-b-plus.dtb \
 	-display gtk \
@@ -87,7 +90,7 @@ qemu_video:
 	# # 啟用 USB 滑鼠（可選）
 	# # 將串口輸出重定向到終端（方便調試）
 show_qemu:
-	sudo minicom -D /dev/pts/1 -b 115200
+	sudo minicom -D /dev/pts/6 -b 115200
 gdb_init:
 	gdb-multiarch -x .gdbinit
 python:

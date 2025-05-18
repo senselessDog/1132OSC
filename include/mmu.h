@@ -2,6 +2,7 @@
 #define MMU_H_GUARD
 //virtual physic offset for kernel
 #define kernel_virtual_offset 0xffff000000000000
+
 //TCR
 #define TCR_CONFIG_REGION_48bit (((64-48) << 0) | ((64-48) << 16))
 #define TCR_CONFIG_4KB ((0b00 << 14) | (0b10 << 30)) // TG0=4KB, TG1=4KB
@@ -73,6 +74,23 @@
                               (MAIR_IDX_NORMAL_NOCACHE<<2)  | \
                               (0b01UL << 6) | /* AP: EL0 Read/Write */ \
                               PD_UXN | PD_PXN)
+
+#define USER_FRAMEBUFFER_ATTR (PD_PAGE | PD_ACCESS | \
+                              (MAIR_IDX_NORMAL_NOCACHE<<2)  | \
+                              (0b01UL << 6) | /* AP: EL0 Read/Write */ \
+                              PD_UXN | PD_PXN)
+//user detail
+#define USER_CODE_VA         0x00000000UL
+#define USER_STACK_TOP_VA    0xfffffffff000UL // Top of a 16KB stack (4 pages)
+#define USER_STACK_SIZE      (4 * PAGE_SIZE)     // 16KB
+#define USER_STACK_BOTTOM_VA 0xffffffffb000UL
+
+#ifndef PHYS_TO_KVA
+#define PHYS_TO_KVA(pa) ((void*)((uint64_t)(pa) + kernel_virtual_offset))
+#endif
+#ifndef KVA_TO_PHYS
+#define KVA_TO_PHYS(kva) ((uint64_t)((uint64_t)(kva) - kernel_virtual_offset))
+#endif
 // 這部分是 C 語言特有的宣告，組合器不應該看到
 #ifndef __ASSEMBLER__
 #include <stdint.h>
@@ -85,6 +103,9 @@ struct file_information
 };
 struct file_information find_program_in_initramfs(char *archive, const char *filename);
 void el0_core_timer_enable(void);
+int mappages(uint64_t pgd_phys, uint64_t va_start, uint64_t size, uint64_t pa_start, uint64_t attributes);
+void run_user_vm(char *archive_va);
+void switch_user_address_space(uint64_t next_pgd_phys_addr);
 #endif /* __ASSEMBLER__ */
 
 #endif /* MMU_H_GUARD */

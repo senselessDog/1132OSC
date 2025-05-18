@@ -74,7 +74,8 @@
     mrs x29, elr_el1
     stp x28, x29, [sp, 16 * 16]
     mrs x28, tpidr_el1
-    str x28, [sp, 16 * 17]
+    mrs x29, ttbr0_el1
+    stp x28, x29, [sp, 16 * 17]
     mov x0,sp
 .endm
 
@@ -87,6 +88,7 @@
     msr elr_el1, x29
     ldp x28,x29, [sp, 16* 17]
     msr tpidr_el1, x28
+    msr ttbr0_el1, x29
     ldp x0, x1, [sp, 16 * 0] 
     ldp x2, x3, [sp, 16 * 1]
     ldp x4, x5, [sp, 16 * 2]

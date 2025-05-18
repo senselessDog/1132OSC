@@ -6,10 +6,10 @@
 #include "syscall.h"
 #include "thread.h"
 #include "alloc.h"
-#define MMIO_BASE 0x3F000000
+// #define MMIO_BASE 0x3F000000
 #define IRQ_PENDING1 ((volatile uint32_t *)(MMIO_BASE + 0x0000B204))
 void display_timer_info(void *arg);
-#define CORE0_INTERRUPT_SOURCE ((volatile uint32_t *)(0x40000060))
+#define CORE0_INTERRUPT_SOURCE ((volatile uint32_t *)(0xFFFF000040000060))
 // 定時器顯示數據結構
 typedef struct
 {
@@ -52,6 +52,12 @@ void sync_lower_el_64_entry(uint64_t parent_sp)
         // asm volatile("mrs %0, cntp_tval_el0" :  "=r"(tmp));
         // uart_send_hex(tmp);
         // uart_send_string("\r\n");
+        // uart_send_string("[sync_lower_el_64_entry] frame address: ");
+        // trap_frame_t *frame = (trap_frame_t *)parent_sp;
+        // uart_send_hex((uint64_t)frame);
+        // uart_send_string(",result: ");
+        // uart_send_int(frame->x0);
+        // uart_send_string("\r\n");
     }
     // // Read exception-related registers
     // unsigned long spsr, elr;
@@ -71,10 +77,7 @@ void sync_lower_el_64_entry(uint64_t parent_sp)
     // uart_send_string("\r\n");
     // int result;
     // asm volatile("mov %0, x0" :"=r"(result));
-    // uart_send_string("[sync_lower_el_64_entry] result: ");
-    // trap_frame_t *frame = (trap_frame_t *)parent_sp;
-    // uart_send_hex(frame->x0);
-    // uart_send_string("\r\n");
+    
 
     return;
 }

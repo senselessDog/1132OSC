@@ -97,6 +97,14 @@ get_current:
 change_tpidr:
     msr tpidr_el1, x0
     ret
+.global get_current_ttbr0_el1
+get_current_ttbr0_el1:
+    mrs x0, ttbr0_el1
+    ret 
+.global change_ttbr0_el1
+change_ttbr0_el1:
+    msr ttbr0_el1, x0
+    ret
 
 
 .global sigreturn_trampoline_entry

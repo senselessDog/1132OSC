@@ -34,7 +34,7 @@
 #define AUX_MU_BAUD_REG ((volatile uint64_t *)(MMIO_BASE + 0x00215068))
 
 // 第一級中斷控制器
-#define CORE0_INTERRUPT_SOURCE ((volatile uint64_t *)(0x40000060))
+#define CORE0_INTERRUPT_SOURCE ((volatile uint64_t *)(0xFFFF000040000060))
 #define GPU_INTERRUPTS 0x100 // 位元 8 代表 GPU 中斷
 
 // 第二級中斷控制器寄存器

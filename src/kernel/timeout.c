@@ -221,6 +221,7 @@ void user_timeout_handler(trap_frame_t *frame)
     // *CORE0_TIMER_IRQ_CTRL |= (1 << 1);  // 寫1清除中斷
     // uart_send_string("[el1_irq_entry] \r\n");
     user_thread_schedule(frame);
+    switch_user_address_space(frame->ttbr0_el1);
     // 創建定時器顯示任務數據
     timer_display_data_t *data = (timer_display_data_t *)simple_alloc(sizeof(timer_display_data_t));
 

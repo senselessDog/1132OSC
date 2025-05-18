@@ -3,17 +3,17 @@
 #include "mailbox.h"
 
 
-int mailbox_call(uint32_t *mailbox)
+int mailbox_call(uint64_t *mailbox)
 {
-    uint32_t address = ((uint32_t)(uintptr_t)mailbox) & ~0xF;
-    uint32_t value = address | 8; // Combine address with channel number (8)
+    uint64_t address = ((uint64_t)(uintptr_t)mailbox) & ~0xF;
+    uint64_t value = address | 8; // Combine address with channel number (8)
 
     // Wait until we can write to the mailbox
     while (*MAILBOX_STATUS & MAILBOX_FULL)
         asm volatile("nop");
 
     // Write the address of our message to the mailbox with channel identifier
-    *MAILBOX_WRITE = value;
+    *MAILBOX_WRITE = KVA_TO_PHYS(value);
 
     // Wait for the response
     while (1)
@@ -23,7 +23,7 @@ int mailbox_call(uint32_t *mailbox)
             asm volatile("nop");
 
         // Check if the response is for us
-        if (*MAILBOX_READ == value)
+        if (*MAILBOX_READ == KVA_TO_PHYS(value))
         {
             uart_send_string("Get Mailbox response \r\n");
             uart_send_hex(mailbox[1]);
@@ -62,7 +62,7 @@ void get_board_revision()
 
 void get_arm_memory()
 {
-    uint32_t mailbox[8] __attribute__((aligned(16)));
+    uint64_t mailbox[8] __attribute__((aligned(16)));
     mailbox[0] = 8 * 4; // buffer size in bytes
     mailbox[1] = REQUEST_CODE;
     // tags begin
@@ -94,21 +94,29 @@ int mailbox_call_lowlevel(unsigned char ch, volatile unsigned int *kernel_mbox) 
     // 位址需要是實體位址，且 16 位元組對齊
     // 在沒有 MMU 的情況下，我們假設 kernel_mbox 的虛擬位址就是實體位址
     // 你的 & ~0xF 操作確保了對齊，但前提是 kernel_mbox 指標本身是對齊的
-    uint32_t addr = (uint32_t)(uintptr_t)kernel_mbox;
+    uint64_t addr = (uint64_t)(uintptr_t)kernel_mbox;
     if (addr & 0xF) { // 檢查是否 16 位元組對齊
-         uart_send_string("Error: mailbox_call_lowlevel buffer not 16-byte aligned.\r\n");
+         uart_send_string("Error: [mailbox_call_lowlevel] buffer not 16-byte aligned.\r\n");
          return -1;
     }
-    uint32_t value = addr | (ch & 0xF); // 使用傳入的 channel
-
+    uint64_t value = addr | (ch & 0xF); // 使用傳入的 channel
+    // uart_send_string("[mailbox_call_lowlevel] MAILBOX_STATUS=");
+    // uart_send_hex(MAILBOX_STATUS);
+    // uart_send_string("\r\n");
+    // for (int i=0; i<=30;i++){
+    //     uart_send_string("[mailbox_call_lowlevel] Request MAILBOX[");
+    //     uart_send_int(i);
+    //     uart_send_string("]= ");
+    //     uart_send_hex(kernel_mbox[i]);
+    //     uart_send_string("\r\n");
+    // }
     // 等待 Mailbox 可寫入
-    while (*MAILBOX_STATUS & MAILBOX_FULL) {
+    while ( *MAILBOX_STATUS& MAILBOX_FULL) {
         asm volatile("nop");
     }
 
     // 寫入訊息位址和通道號
-    *MAILBOX_WRITE = value;
-
+    *MAILBOX_WRITE = KVA_TO_PHYS(value);
     // 等待回應
     while (1) {
         // 等待 Mailbox 可讀取
@@ -117,11 +125,21 @@ int mailbox_call_lowlevel(unsigned char ch, volatile unsigned int *kernel_mbox) 
         }
 
         // 讀取回應，看是否是給我們的
-        if (*MAILBOX_READ == value)
+        if (*MAILBOX_READ == KVA_TO_PHYS(value))
         {
-            uart_send_string("Get Mailbox response \r\n");
+            uart_send_string("[mailbox_call_lowlevel]Get Mailbox response \r\n");
             uart_send_hex(kernel_mbox[1]);
             uart_send_string("\r\n");
+            uart_send_string("[mailbox_call_lowlevel]KERNEL Frame_buffer address=");
+            uart_send_hex(kernel_mbox[28]);
+            uart_send_string("\r\n");
+            // for (int i=0; i<=30;i++){
+            //     uart_send_string("[mailbox_call_lowlevel] Response MAILBOX[");
+            //     uart_send_int(i);
+            //     uart_send_string("]= ");
+            //     uart_send_hex(kernel_mbox[i]);
+            //     uart_send_string("\r\n");
+            // }   
             return 1;
         }
         // 如果讀到的不是我們要的 value，理論上應該繼續等，
@@ -129,4 +147,40 @@ int mailbox_call_lowlevel(unsigned char ch, volatile unsigned int *kernel_mbox) 
     }
     // 理論上這裡不會到，可以加上超時處理
     return -1; // 表示超時或其他錯誤
+}
+int map_framebuffer_for_user(uint64_t user_pgd_pa,  uint64_t va_start, uint64_t size, uint64_t pa_start) {
+    if (pa_start == 0 || size == 0) {
+        uart_send_string("Error: [map_framebuffer_for_user] Framebuffer not initialized or size is zero.\r\n");
+        return -1;
+    }
+
+    // 確保 Framebuffer 大小是頁對齊的，如果不是，向上取整
+    // (通常 GPU 返回的大小本身就是頁對齊的，或者至少是某種對齊)
+
+    uart_send_string("[map_framebuffer_for_user] Mapping Framebuffer for user:\r\n");
+    uart_send_string("  User PGD PA: 0x"); uart_send_hex(user_pgd_pa); uart_send_string("\r\n");
+    uart_send_string("  FB PA: 0x"); uart_send_hex(pa_start);
+    uart_send_string(", FB Size: 0x"); uart_send_hex(size);
+    uart_send_string("  Target User VA Start: 0x"); uart_send_hex(va_start);
+    uart_send_string("\r\n");
+
+    // 呼叫 mappages 進行映射
+    // pgd_pa: 使用者行程的 PGD 實體位址
+    // va_start: 我們為使用者 Framebuffer 選擇的虛擬起始位址
+    // size: Framebuffer 的大小 (對齊後)
+    // pa_start: Framebuffer 的實際實體位址
+    // attributes: 允許使用者讀寫的屬性
+    if (mappages(user_pgd_pa, 
+                 va_start, 
+                 size, 
+                 pa_start, // Framebuffer 的實體位址
+                 USER_FRAMEBUFFER_ATTR) != 0) {
+        uart_send_string("Error: [map_framebuffer_for_user] Failed to map framebuffer into user space.\r\n");
+        return -1;
+    }
+
+    uart_send_string("[map_framebuffer_for_user]Framebuffer successfully mapped for user.\r\n");
+    // 核心可以將 USER_FRAMEBUFFER_VA_START 和 fb_size_aligned 這些資訊
+    // 透過某種方式 (例如 syscall 返回值或共享記憶體) 告知使用者程式。
+    return 1;
 }

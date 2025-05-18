@@ -15,6 +15,7 @@ fork_test.img: fork_test.o
 	$(ARMGNU)-ld $(LDFLAGS) -o fork_test.elf fork_test.o
 	$(ARMGNU)-objcopy fork_test.elf -O binary fork_test.img
 	cp ./fork_test.img ../rootfs/
+	cp ./vm.img ../rootfs/
 	(cd ../rootfs/ && find . | cpio -o -H newc > ../initramfs.cpio)
 
 userProcessStatus.o: userProcessStatus.S

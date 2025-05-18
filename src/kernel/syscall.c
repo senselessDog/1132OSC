@@ -186,18 +186,22 @@ int sys_exec(const char* name, char* const argv[],trap_frame_t *frame) {
     current_thread->state=THREAD_READY;
     //create new thread
     thread_t *execute_thread = thread_create(name, NULL);
+    change_tpidr(execute_thread);
     //allocate user space
-    void *user_base=run_user_vm((char *)g_initramfs_addr);
+    run_user_vm((char *)g_initramfs_addr);
+    switch_user_address_space(frame->ttbr0_el1);
     frame->x0=execute_thread->id;
     //allocate new thread context and pass to frame
-    execute_thread->trap_frame.elr_el1=user_base;
-    execute_thread->trap_frame.sp_el0=execute_thread->fp;
+    execute_thread->trap_frame.elr_el1=USER_CODE_VA;
+    execute_thread->trap_frame.sp_el0=USER_STACK_TOP_VA;
     execute_thread->trap_frame.spsr_el1=0x0;
     execute_thread->trap_frame.tpidr_el1=execute_thread;
+    //ttbr0 already done at run_user_vm
     frame->elr_el1=execute_thread->trap_frame.elr_el1;
     frame->sp_el0=execute_thread->trap_frame.sp_el0;
     frame->spsr_el1=execute_thread->trap_frame.spsr_el1;
     frame->tpidr_el1=execute_thread;
+    frame->ttbr0_el1=get_current_ttbr0_el1();
     uart_send_string("execute_thread: ");
     uart_send_hex(execute_thread);
     uart_send_string("\r\n");
@@ -208,35 +212,36 @@ int sys_exec(const char* name, char* const argv[],trap_frame_t *frame) {
 }
  
 int sys_fork(trap_frame_t *frame) {
-    
-    uart_send_string("[sys_fork]parent thread id: ");
     thread_t *parent = get_current();
+    uart_send_string("[sys_fork]parent thread id: ");
     uart_send_int(parent->id);
     uart_send_string("\r\n");
-    uart_send_string("[sys_fork]frame->elr_el1: ");
-    uart_send_hex(frame->elr_el1);
-    uart_send_string("\r\n");
-    uart_send_string("[sys_fork]frame->sp_el0: ");
-    uart_send_hex(frame->sp_el0);
-    uart_send_string("\r\n");
-    uart_send_string("[sys_fork]frame->tpidr_el1: ");
-    uart_send_hex(frame->tpidr_el1);
-    uart_send_string("\r\n");
+    uart_send_string("[sys_fork] ---- Parent's Target Trap Frame Values ----\r\n");
+    uart_send_string("  elr_el1 (return to user VA): 0x"); uart_send_hex(frame->elr_el1); uart_send_string("\r\n");
+    uart_send_string("  sp_el0 (user stack VA):    0x"); uart_send_hex(frame->sp_el0); uart_send_string("\r\n");
+    uart_send_string("  spsr_el1 (user PSTATE):    0x"); uart_send_hex(frame->spsr_el1); uart_send_string("\r\n");
+    uart_send_string("  ttbr0_el1 (user PGD PA):   0x"); uart_send_hex(frame->ttbr0_el1); uart_send_string("\r\n");
+    uart_send_string("  tpidr_el1 (thread ptr):    0x"); uart_send_hex(frame->tpidr_el1); uart_send_string("\r\n");
+    // uart_send_string("  x0 (return value):         0x"); uart_send_hex(frame->trap_frame.x0); uart_send_string("\r\n");
+    uart_send_string("[sys_fork] ------------------------------------------\r\n");
+    
+    // Below is child thing
     // 創建新進程 (copy elr_el1 and regs(x19~x31))
     thread_t *child = thread_create(NULL, frame);
-    //for parent thread
+    //for parent thread result
     frame->x0=child->id; 
-    
     // 手動保存父進程的寄存器狀態
-    save_trap_frame(frame,get_current());
-    uart_send_string("[sys_fork]Parent Thread id: ");
-    parent = get_current();
-    uart_send_int(parent->id);
-    uart_send_string("\r\n");
+    save_trap_frame(frame,parent);
+    
+    
+    // uart_send_string("[sys_fork]Parent Thread id: ");
+    // uart_send_int(parent->id);
+    // uart_send_string("\r\n");
     uart_send_string("[sys_fork]Child Thread id: ");
     uart_send_int(child->id);
     uart_send_string("\r\n");
-    
+    //Clear TLB& change ttbr0_el1
+    switch_user_address_space(frame->ttbr0_el1);
     //copy stack space
     // uart_send_string("[system call] frame->sp_el0: ");
     // uart_send_hex(frame->sp_el0);
@@ -260,11 +265,9 @@ int sys_fork(trap_frame_t *frame) {
     // asm volatile("ldr x0, [sp, %0]" : : "r"(16 * 16 + 8));  // spsr_el1
     // asm volatile("mrs x1, tpidr_el1");
     // asm volatile("str x0, [x1, %0]" : : "r"(33 * 8));
-
-    uint64_t parent_sp_el0=frame->sp_el0;
     // memcpy((void *)child->thread_context.fp-THREAD_STACK_SIZE, (void *)frame->x29-THREAD_STACK_SIZE, THREAD_STACK_SIZE);
     // frame->sp_el0=child->thread_context.fp-(frame->x29-frame->sp_el0);
-    frame->tpidr_el1=child;
+    // frame->tpidr_el1=child;
     fork_schedule(frame,child);
     //Deal with signal
     // 1. 複製 sighand 陣列
@@ -276,15 +279,17 @@ int sys_fork(trap_frame_t *frame) {
     // 3. 子行程不應該處於 is_handling_signal 狀態
     child->is_handling_signal = 0;
     uart_send_string("[sys_fork] Finished signal copy\r\n");
-    uint64_t sp_el0;
-    //asm volatile("mrs %0, sp_el0" : "=r"(sp_el0));
-    sp_el0=frame->sp_el0;
-    if (sp_el0==parent_sp_el0){ //parent thread
-        return child->id;
-    }
-    else{ //child thread
-        return 0;
-    }
+    // Then print from child_thread->trap_frame
+    uart_send_string("[sys_fork] ---- Child's Target Trap Frame Values ----\r\n");
+    uart_send_string("  elr_el1 (return to user VA): 0x"); uart_send_hex(frame->elr_el1); uart_send_string("\r\n");
+    uart_send_string("  sp_el0 (user stack VA):    0x"); uart_send_hex(frame->sp_el0); uart_send_string("\r\n");
+    uart_send_string("  spsr_el1 (user PSTATE):    0x"); uart_send_hex(frame->spsr_el1); uart_send_string("\r\n");
+    uart_send_string("  ttbr0_el1 (user PGD PA):   0x"); uart_send_hex(frame->ttbr0_el1); uart_send_string("\r\n");
+    uart_send_string("  tpidr_el1 (thread ptr):    0x"); uart_send_hex(frame->tpidr_el1); uart_send_string("\r\n");
+    // uart_send_string("  x0 (return value):         0x"); uart_send_hex(frame->trap_frame.x0); uart_send_string("\r\n");
+    uart_send_string("[sys_fork] ------------------------------------------\r\n");
+    //child return value
+    return 0;
 }
 
 void sys_exit(trap_frame_t *frame) {
@@ -317,7 +322,7 @@ int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
     // 這裡需要一種安全的方式讀取，或者暫時直接讀取
     //memcpy(&buffer_size, user_mbox, sizeof(unsigned int)); // 稍微安全一點點
     buffer_size=user_mbox[0];
-
+    
     // 基本的大小檢查
     if (buffer_size < 8 || buffer_size > 1024*4 ) { // 最小 2 個 uint, 合理最大值
         uart_send_string("KERN: Invalid mailbox buffer size.\r\n");
@@ -338,7 +343,9 @@ int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
     // 4. 複製請求 (User -> Kernel)
     //    !!! 警告：沒有 MMU，直接 memcpy 有風險 !!!
     memcpy((void *)kernel_mbox, user_mbox, buffer_size);
-
+    uart_send_string("[sys_mbox_call]USER Frame_buffer address=");
+    uart_send_hex(user_mbox[28]);
+    uart_send_string("\r\n");
     // 5. 呼叫底層 Mailbox 函數 (使用核心緩衝區)
     int result = mailbox_call_lowlevel(ch, kernel_mbox);
 
@@ -352,8 +359,21 @@ int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
     // 7. 釋放核心緩衝區
     dynamic_free((void*)kernel_mbox);
     // uart_send_string("[sys_mbox_call] Sucess finish kernel mailbox buffer...\r\n");
-
-    // 8. 回傳結果 (lowlevel 的回傳值, 0 代表成功)
+    //8. mappings
+    volatile unsigned int *mailbox=(volatile unsigned int *)kernel_mbox;
+    uint64_t frame_buffer_start_pa=(uint64_t)mailbox[28];
+    uint64_t frame_buffer_size=(uint64_t)mailbox[29];
+    uint64_t user_pgd_pa=get_current_ttbr0_el1();
+    uart_send_string("[sys_mbox_call] user_pgd_pa=");
+    uart_send_int(user_pgd_pa);
+    uart_send_string("\r\n");
+    if (map_framebuffer_for_user(user_pgd_pa,frame_buffer_start_pa, frame_buffer_size, frame_buffer_start_pa)!=1){
+        uart_send_string("Error: [sys_mbox_call] Can't map framebuffer to VA\r\n");
+        return 0;
+    }
+    uart_send_string("[sys_mbox_call] result=");
+    uart_send_int(result);
+    uart_send_string("\r\n");
     return result;
 }
 

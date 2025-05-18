@@ -8,49 +8,46 @@ static inline uint64_t va_to_index(uint64_t va, int level_shift) {
     return (va >> level_shift) & TABLE_INDEX_MASK;
 }
 
-uint64_t* walk_and_create_pte(uint64_t pgd_phys, uint64_t va, int alloc) {
-    uint64_t* current_table_phys = (uint64_t*)pgd_phys;
-    uint64_t  next_table_base_phys;
-    uint64_t* entry_phys_ptr;
+uint64_t* walk_and_create_pte(uint64_t pgd_pa, uint64_t va, int alloc) {
+    // 核心透過KVA存取目標PGD的內容
+    uint64_t* current_table_access_kva = (uint64_t*)PHYS_TO_KVA(pgd_pa);
+    uint64_t  next_table_alloc_kva;   // dynamic_malloc 返回的 KVA
+    uint64_t  next_table_pa_to_store; // 要存入分頁表條目的 PA
+    uint64_t* entry_access_kva_ptr;   // 指向當前分頁表條目的核心虛擬位址指標
 
-    // Level 1: PGD -> PUD
-    entry_phys_ptr = &current_table_phys[va_to_index(va, PGD_SHIFT)];
-    if (!(*entry_phys_ptr & PD_TABLE)) { // Check if valid table descriptor
-        if (!alloc) return NULL;
-        next_table_base_phys = (uint64_t)(dynamic_malloc(4096)-kernel_virtual_offset);
-        if (!next_table_base_phys) return NULL; // Allocation failed
-        memset((void*)next_table_base_phys, 0, PAGE_SIZE);
-        *entry_phys_ptr = next_table_base_phys | PD_TABLE;
+    int level_shifts[] = {PGD_SHIFT, PUD_SHIFT, PMD_SHIFT}; // PGD->PUD, PUD->PMD, PMD->PTE_Table
+
+    for (int i = 0; i < 3; ++i) { // 遍歷 PGD, PUD, PMD 層級
+        entry_access_kva_ptr = &current_table_access_kva[va_to_index(va, level_shifts[i])];
+
+        if (!(*entry_access_kva_ptr & PD_TABLE)) { // 檢查是否為有效的表描述符
+            if (!alloc) {
+                uart_send_string("[walk] No alloc and table entry missing.\r\n");
+                return NULL;
+            }
+            next_table_alloc_kva = (uint64_t)dynamic_malloc(PAGE_SIZE);
+            if (!next_table_alloc_kva) {
+                uart_send_string("[walk] dynamic_malloc for new table failed.\r\n");
+                return NULL;
+            }
+            // 使用KVA進行memset
+            memset((void*)next_table_alloc_kva, 0, PAGE_SIZE);
+            // 將KVA轉換為PA以存入分頁表條目
+            next_table_pa_to_store = KVA_TO_PHYS(next_table_alloc_kva);
+            *entry_access_kva_ptr = next_table_pa_to_store | PD_TABLE;
+            uart_send_string("[walk] Created new table. KVA: 0x"); uart_send_hex(next_table_alloc_kva);
+            uart_send_string(" -> PA: 0x"); uart_send_hex(next_table_pa_to_store);
+            uart_send_string("\r\n[walk]stored in entry @ KVA 0x"); uart_send_hex((uint64_t)entry_access_kva_ptr);
+            uart_send_string("\r\n");
+        }
+        // 從條目中讀取下一級表的PA，並轉換為KVA供核心存取
+        current_table_access_kva = (uint64_t*)PHYS_TO_KVA((*entry_access_kva_ptr) & TABLE_ADDR_MASK);
     }
-    current_table_phys = (uint64_t*)((*entry_phys_ptr) & TABLE_ADDR_MASK);
 
-    // Level 2: PUD -> PMD
-    entry_phys_ptr = &current_table_phys[va_to_index(va, PUD_SHIFT)];
-    if (!(*entry_phys_ptr & PD_TABLE)) {
-        if (!alloc) return NULL;
-        next_table_base_phys = (uint64_t)(dynamic_malloc(4096)-kernel_virtual_offset);
-        if (!next_table_base_phys) return NULL;
-        memset((void*)next_table_base_phys, 0, PAGE_SIZE);
-        *entry_phys_ptr = next_table_base_phys | PD_TABLE;
-    }
-    current_table_phys = (uint64_t*)((*entry_phys_ptr) & TABLE_ADDR_MASK);
-
-    // Level 3: PMD -> PTE Table
-    entry_phys_ptr = &current_table_phys[va_to_index(va, PMD_SHIFT)];
-    if (!(*entry_phys_ptr & PD_TABLE)) {
-        if (!alloc) return NULL;
-        next_table_base_phys = (uint64_t)(dynamic_malloc(4096)-kernel_virtual_offset);
-        if (!next_table_base_phys) return NULL;
-        memset((void*)next_table_base_phys, 0, PAGE_SIZE);
-        *entry_phys_ptr = next_table_base_phys | PD_TABLE;
-    }
-    current_table_phys = (uint64_t*)((*entry_phys_ptr) & TABLE_ADDR_MASK);
-
-    // Now current_table_phys points to the base of the PTE table
-    // Return pointer to the specific PTE entry
-    return &current_table_phys[va_to_index(va, PTE_SHIFT)];
+    // 現在 current_table_access_kva 指向PTE表的基底KVA
+    // 返回指向特定PTE條目的KVA指標
+    return &current_table_access_kva[va_to_index(va, PTE_SHIFT)];
 }
-
 int mappages(uint64_t pgd_phys, uint64_t va_start, uint64_t size, uint64_t pa_start, uint64_t attributes) {
     if ((va_start % PAGE_SIZE != 0) || (pa_start % PAGE_SIZE != 0) || (size % PAGE_SIZE != 0)) {
         uart_send_string("Error: [mappages] - addresses or size not page aligned.\r\n");
@@ -107,10 +104,10 @@ void switch_to_el0_vm(uint64_t user_pgd_phys, void *start_va, void *stack_top_va
     asm volatile("tlbi vmalle1is"); // Invalidate TLB entries for EL1 and EL0, inner shareable
     asm volatile("dsb ish");      // Ensure TLB invalidation completes
     asm volatile("isb");          // Synchronize context, clear pipeline
-
     // 3. Prepare SPSR_EL1 and ELR_EL1 for eret
     // SPSR_EL1: Target EL0, AArch64, No interrupts masked (D,A,I,F = 0)
     uint64_t spsr_el0 = 0x0; // EL0t (using SP_EL0), AArch64, all interrupts unmasked
+    el0_core_timer_enable();
     asm volatile(
         "msr spsr_el1, %0\n"  // Status to restore (EL0 mode)
         "msr elr_el1, %1\n"   // Exception Link Register (return address in EL0)
@@ -125,13 +122,9 @@ void switch_to_el0_vm(uint64_t user_pgd_phys, void *start_va, void *stack_top_va
 // static int first_thread = 1; // This should be managed per-process if you have multiple
 
 // User program's target virtual addresses
-#define USER_CODE_VA         0x00000000UL
-#define USER_STACK_TOP_VA    0xfffffffff000UL // Top of a 16KB stack (4 pages)
-#define USER_STACK_SIZE      (4 * PAGE_SIZE)     // 16KB
-#define USER_STACK_BOTTOM_VA 0xffffffffb000UL
 
 
-void run_user_vm(char *archive_phys_addr) {
+void run_user_vm(char *archive_kva_addr) {
     char filename[1024];
     int index = 0;
     // Receive the filename from the user
@@ -160,12 +153,16 @@ void run_user_vm(char *archive_phys_addr) {
     // For simplicity, I'll use default_filename. If you uncomment your UART input,
     // make sure filename_buffer is used for find_program_in_initramfs.
 
-    uart_send_string("[run_user_vm] Archive PA: 0x"); uart_send_hex((uint64_t)archive_phys_addr); uart_send_string("\r\n");
+    uart_send_string("[run_user_vm] Archive PA: 0x"); uart_send_hex((uint64_t)archive_kva_addr); uart_send_string("\r\n");
     uart_send_string("[run_user_vm] Program: "); uart_send_string(filename); uart_send_string("\r\n");
 
-    struct file_information program_info = find_program_in_initramfs(archive_phys_addr, filename);
+    struct file_information program_info = find_program_in_initramfs(archive_kva_addr, filename);
     if (!program_info.filecontext || program_info.filesize <= 0) {
         uart_send_string("Error: [run_user_vm] Program not found or empty: "); uart_send_string(filename); uart_send_string("\r\n");
+        return;
+    }
+    if (program_info.filesize>user_space_size){
+        uart_send_string("Error: [run_user_vm] Program Size too large "); uart_send_string(filename); uart_send_string("\r\n");
         return;
     }
     uart_send_string("[run_user_vm]Program found. PA: 0x"); uart_send_hex((uint64_t)program_info.filecontext);
@@ -173,46 +170,48 @@ void run_user_vm(char *archive_phys_addr) {
 
 
     // 1. Allocate PGD for the new user address space
-    uint64_t user_pgd_virtual = (uint64_t)dynamic_malloc(4096);
-    uint64_t user_pgd_phys=(uint64_t)(user_pgd_virtual-kernel_virtual_offset);
-    if (!user_pgd_phys) {
+    uint64_t user_pgd_kva = (uint64_t)dynamic_malloc(4096);
+    if (!user_pgd_kva) {
         uart_send_string("Error:[run_user_vm] Failed to allocate PGD for user space!\r\n");
         return;
     }
-    memset((void*)user_pgd_phys, 0, PAGE_SIZE); // Clear PGD
-    uart_send_string("[run_user_vm] User PGD allocated at PA: 0x"); uart_send_hex(user_pgd_phys); uart_send_string("\r\n");
+    uint64_t user_pgd_pa=KVA_TO_PHYS(user_pgd_kva);
+    memset((void*)user_pgd_kva, 0, PAGE_SIZE); // Clear PGD
+    uart_send_string("[run_user_vm] User PGD allocated at PA: 0x"); uart_send_hex(user_pgd_pa); uart_send_string("\r\n");
 
     // 2. Map user program's code
     // Assuming program_info.filecontext is the PHYSICAL address of the code
-    void * user_base=dynamic_malloc(user_space_size);
+    uint64_t user_base_kva=(uint64_t)dynamic_malloc(user_space_size);
+    uint64_t user_base_pa=KVA_TO_PHYS(user_base_kva);
     // uart_send_string("Create parent thread: ");
     // thread_t * parent_thread=thread_create(user_base,NULL);
     // uart_send_string("Create parent thread success\r\n");
-    void *user_stack=user_base+user_space_size;
+    // void *user_stack=user_base+user_space_size;
     
-    memcpy(user_base,(const void *)program_info.filecontext, (uint32_t)program_info.filesize);
-    if (mappages(user_pgd_phys, USER_CODE_VA, (uint64_t)user_space_size, (uint64_t)user_base-kernel_virtual_offset, USER_CODE_ATTR) != 0) {
+    memcpy((void*)user_base_kva,(const void *)program_info.filecontext, (uint32_t)program_info.filesize);
+    if (mappages(user_pgd_pa, USER_CODE_VA, (uint64_t)user_space_size, user_base_pa, USER_CODE_ATTR) != 0) {
         uart_send_string("[run_user_vm] Failed to map user code!\r\n");
         // Potentially free PGD and other allocated tables here
         return;
     }
-    uart_send_string("[run_user_vm] User code mapped: VA 0x0 to PA 0x"); uart_send_hex((uint64_t)user_base);
+    uart_send_string("[run_user_vm] User code mapped: VA 0x0 to PA 0x"); uart_send_hex((uint64_t)user_base_pa);
     uart_send_string(" (size 0x"); uart_send_hex(user_space_size); uart_send_string(")\r\n");
 
 
     // 3. Allocate and map user stack (4 pages = 16KB)
-    uint64_t user_stack_pa_pages = (uint64_t)dynamic_malloc(PAGE_SIZE*4);
-    if (!user_stack_pa_pages){
+    uint64_t user_stack_kva = (uint64_t)dynamic_malloc(PAGE_SIZE*4);
+    if (!user_stack_kva){
         uart_send_string("Error: [run_user_vm] user_stack_pa_pages can't alloc");
     }
+    uint64_t user_stack_pa = KVA_TO_PHYS(user_stack_kva);
     // No need to memset stack pages, user program will use them.
-    uart_send_string("User stack page ");
-    uart_send_string(" allocated at PA: 0x"); uart_send_hex(user_stack_pa_pages); uart_send_string("\r\n");
+    uart_send_string("[run_user_vm]User stack page ");
+    uart_send_string(" allocated at PA: 0x"); uart_send_hex(user_stack_pa); uart_send_string("\r\n");
 
         // Map this single page
         // Stack grows downwards, so USER_STACK_BOTTOM_VA is the start of the VA range.
         // We map pa_pages[0] to USER_STACK_BOTTOM_VA, pa_pages[1] to USER_STACK_BOTTOM_VA + PAGE_SIZE, etc.
-    if (mappages(user_pgd_phys, USER_STACK_BOTTOM_VA, PAGE_SIZE*4, user_stack_pa_pages-kernel_virtual_offset, USER_DATA_STACK_ATTR) != 0) {
+    if (mappages(user_pgd_pa, USER_STACK_BOTTOM_VA, USER_STACK_SIZE, user_stack_pa, USER_DATA_STACK_ATTR) != 0) {
         uart_send_string("Error: [run_user_vm]Failed to map user stack page!\r\n");
         // Potentially free PGD and other allocated tables/pages here
         return;
@@ -221,16 +220,55 @@ void run_user_vm(char *archive_phys_addr) {
     uart_send_string(" - 0x"); uart_send_hex(USER_STACK_TOP_VA -1); uart_send_string("\r\n");
 
 
-    // 4. Setup and Switch to EL0
-    if (first_thread){
-        thread_init_user();   
-    }
     // The stack pointer SP_EL0 should point to the top of the allocated stack region.
     if (first_thread){
+        thread_init_user((void*)user_base_pa,(void*)user_stack_kva);
         first_thread=0;
-        switch_to_el0_vm(user_pgd_phys, (void*)USER_CODE_VA, (void*)USER_STACK_TOP_VA);
+        switch_to_el0_vm(user_pgd_pa, (void*)USER_CODE_VA, (void*)USER_STACK_TOP_VA);
+    }else{
+        thread_t * current_thread=get_current();
+        current_thread->thread_stack_alloc_kva=user_stack_kva;
+        current_thread->user_code_start_pa=user_base_pa;
+        change_ttbr0_el1(user_pgd_pa);
     }
-
+    return;
     // Kernel should not reach here after eret if switch is successful
     // uart_send_string("Error: Returned from switch_to_el0_vm unexpectedly!\r\n");
+}
+
+void switch_user_address_space(uint64_t next_pgd_phys_addr) {
+    // uart_send_string("[MMU] Switching user address space to PGD PA: 0x");
+    // uart_send_hex(next_pgd_phys_addr);
+    // uart_send_string("\r\n");
+
+    // 執行記憶體屏障，確保所有在切換 TTBR0_EL1 之前的記憶體寫入操作都已完成。
+    // DSB (Data Synchronization Barrier): 確保所有在此指令之前的資料存取操作
+    // (讀取或寫入) 都已完成，才會執行後續指令。
+    // ISH (Inner Shareable): 屏障作用於內部共享域 (通常是同一個處理器內的所有核心)。
+    asm volatile("dsb ish" : : : "memory");
+
+    // 將 next_pgd_phys_addr (新的 PGD 實體位址) 載入到 TTBR0_EL1 系統暫存器。
+    // %0 代表第一個 C 語言變數 (next_pgd_phys_addr)。
+    // "r" 表示這個變數會透過一個通用暫存器傳遞。
+    asm volatile("msr ttbr0_el1, %0" : : "r"(next_pgd_phys_addr) : "memory");
+
+    // 再次執行 DSB ISH，確保 TTBR0_EL1 的更新對後續的 TLB 操作可見。
+    asm volatile("dsb ish" : : : "memory");
+
+    // TLBI (TLB Invalidate): 使 TLB 條目失效。
+    // VMALLE1IS (VMID All, EL1 and Stage 1, Inner Shareable):
+    // 使所有屬於目前 VMID (虛擬機器 ID，如果未使用則為全域) 的、
+    // EL1 和 EL0 的、第一階段翻譯的、內部共享域的 TLB 條目失效。
+    // 簡單來說，因為我們切換了整個使用者位址空間 (PGD)，所以需要讓所有相關的舊翻譯快取失效。
+    asm volatile("tlbi vmalle1is" : : : "memory");
+
+    // 再次執行 DSB ISH，確保 TLB 失效操作已完成。
+    asm volatile("dsb ish" : : : "memory");
+
+    // ISB (Instruction Synchronization Barrier): 清空處理器的管線 (pipeline)，
+    // 確保所有後續執行的指令都會從快取或記憶體中重新獲取，
+    // 並且使用最新的系統設定 (例如新的 TTBR0_EL1 和失效後的 TLB)。
+    asm volatile("isb" : : : "memory");
+
+    // uart_send_string("[MMU] User address space switched.\r\n");
 }

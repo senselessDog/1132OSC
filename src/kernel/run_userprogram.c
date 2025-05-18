@@ -16,7 +16,7 @@ struct file_information
     int filesize;
 };
 static int first_thread=1;
-#define CORE0_TIMER_IRQ_CTRL 0x40000040
+#define CORE0_TIMER_IRQ_CTRL 0xFFFF000040000040
 void timer_disable(void){
     //disable time interrupt
     asm volatile("mov x0, #0");
@@ -137,7 +137,7 @@ void *run_user(char *archive)
     // program_info = find_program_in_initramfs(archive, filename);
     //init user thread
     if (first_thread){
-        thread_init_user();
+        thread_init_user(0,0);
         
     }
     uart_send_string("user_base: ");

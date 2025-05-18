@@ -2,6 +2,7 @@
 #include "uart.h"
 #include "buddy_alloc.h"
 #include "syscall.h"
+#include "mmu.h"
 extern thread_t *run_queue;
 void user_idle(trap_frame_t *frame) {
     while (1) {
@@ -21,6 +22,14 @@ void user_thread_exit(trap_frame_t *frame,int thread_id) {
         delete_thread=current;
     } 
     if (delete_thread) {
+        uart_send_string("[user_thread_exit] ---- Delete's Target Trap Frame Values ----\r\n");
+        uart_send_string("  elr_el1 (return to user VA): 0x"); uart_send_hex(frame->elr_el1); uart_send_string("\r\n");
+        uart_send_string("  sp_el0 (user stack VA):    0x"); uart_send_hex(frame->sp_el0); uart_send_string("\r\n");
+        uart_send_string("  spsr_el1 (user PSTATE):    0x"); uart_send_hex(frame->spsr_el1); uart_send_string("\r\n");
+        uart_send_string("  ttbr0_el1 (user PGD PA):   0x"); uart_send_hex(frame->ttbr0_el1); uart_send_string("\r\n");
+        uart_send_string("  tpidr_el1 (thread ptr):    0x"); uart_send_hex(frame->tpidr_el1); uart_send_string("\r\n");
+        // uart_send_string("  x0 (return value):         0x"); uart_send_hex(frame->trap_frame.x0); uart_send_string("\r\n");
+        uart_send_string("[sys_fork] ------------------------------------------\r\n");
         uart_send_string("[user_thread_exit] Thread ID: ");
         uart_send_int(delete_thread->id);
         uart_send_string(" exiting.\r\n");
@@ -31,6 +40,15 @@ void user_thread_exit(trap_frame_t *frame,int thread_id) {
         uart_send_string("[user_thread_exit] Thread ID: ");
         uart_send_int(delete_thread->id);
         uart_send_string(" exited.\r\n");
+        switch_user_address_space(frame->ttbr0_el1);
+        uart_send_string("[user_thread_exit] ---- Next's Target Trap Frame Values ----\r\n");
+        uart_send_string("  elr_el1 (return to user VA): 0x"); uart_send_hex(frame->elr_el1); uart_send_string("\r\n");
+        uart_send_string("  sp_el0 (user stack VA):    0x"); uart_send_hex(frame->sp_el0); uart_send_string("\r\n");
+        uart_send_string("  spsr_el1 (user PSTATE):    0x"); uart_send_hex(frame->spsr_el1); uart_send_string("\r\n");
+        uart_send_string("  ttbr0_el1 (user PGD PA):   0x"); uart_send_hex(frame->ttbr0_el1); uart_send_string("\r\n");
+        uart_send_string("  tpidr_el1 (thread ptr):    0x"); uart_send_hex(frame->tpidr_el1); uart_send_string("\r\n");
+        // uart_send_string("  x0 (return value):         0x"); uart_send_hex(frame->trap_frame.x0); uart_send_string("\r\n");
+        uart_send_string("[user_thread_exit] ------------------------------------------\r\n");
     }
 }
 

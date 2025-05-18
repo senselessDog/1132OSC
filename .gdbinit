@@ -25,13 +25,23 @@ define kernel
   # b mappages
   # # b walk_and_create_pte
   # b switch_to_el0_vm
-  b *0x0
-  # b sync_lower_el_64_entry
-  b buddy_init
-  b run_user_vm
-  b handle_syscall
-  b syscall.c:35
-  b syscall.c:36
+  # b *0x0
+  # # b sync_lower_el_64_entry
+  # b buddy_init
+  # b run_user_vm
+  # b handle_syscall
+  # b syscall.c:35
+  # b syscall.c:36
+  b sys_fork
+  # b el1_irq_entry
+  # b lower_el_irq_entry
+  # b thread.c:153
+  # b thread.c:395
+  b sys_mbox_call
+  b map_framebuffer_for_user
+  b default_exception_handler
+  b find_thread_by_pid
+  # b mmu.c:30
   #b simple_alloc
   # b user_thread_schedule
   # b el0_core_timer_enable

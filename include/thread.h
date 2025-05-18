@@ -25,11 +25,12 @@ typedef struct {
 
 //singal number
 #define NSIG 32
-typedef struct {
+typedef struct thread{
     int id;
     thread_state_t state;
     void (*entry_point)(void);
-    void* thread_stack_alloc_ptr;
+    void* thread_stack_alloc_kva;
+    void* user_code_start_pa;
     thread_context_block_t thread_context;
     struct thread *next;
     void* fp;
@@ -61,19 +62,21 @@ typedef struct {
 
 // Thread management functions
 void thread_init(void);
-void thread_init_user(void);
+void thread_init_user(void* user_code_start_pa,void* thread_stack_alloc_kva);
 void add_to_run_queue(thread_t *thd);
 void remove_from_run_queue(thread_t *thd);
 thread_t *thread_create(void (*entry_point)(void),trap_frame_t *frame);
 void thread_exit(void);
 void schedule(int is_exit);
+void fork_schedule(trap_frame_t *frame, thread_t* child_thread);
 void thread_create_save(uint64_t thread_sp, uint64_t thread_fp, uint64_t thread_lr);
-// thread_t *get_current_thread(void);
+thread_t *get_current(void);
 void idle(void);
 void kill_zombie_thread(void);
 void thread_test(void);
 void save_trap_frame(trap_frame_t *frame, thread_t *thread);
 void restore_trap_frame(trap_frame_t *frame, thread_t *thread);
+thread_t * find_thread_by_pid(int pid);
 
 // // --- External assembly functions ---
 // extern void switch_to(kcontext_t *prev_ctx, kcontext_t *next_ctx);

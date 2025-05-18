@@ -3,7 +3,8 @@
 #include "buddy_alloc.h"
 #include "syscall.h"
 #include <stddef.h>
-
+#include "mmu.h"
+#include "strcmp.h"
 static thread_t *current_thread = NULL;
 thread_t *run_queue = NULL;
 static int next_thread_id = 1;
@@ -82,35 +83,38 @@ void thread_init(void) {
     add_to_run_queue(kernel_thread);
     uart_send_string("Thread system initialized. Idle thread created.\r\n");
 }
-void thread_init_user(void) {
+void thread_init_user(void* user_code_start_pa,void* thread_stack_alloc_kva) {
+    if (!thread_stack_alloc_kva){
+        uart_send_string("Error: [thread_init_user] thread_stack_alloc_kva have error\r\n");
+    }
     current_thread = NULL;
     run_queue = NULL;
     next_thread_id = 1;
 
     // 創建一個特殊的 kernel 線程
-    thread_t *kernel_thread = (thread_t *)dynamic_malloc(sizeof(thread_t));
-    kernel_thread->id = 0;  // kernel 線程的 ID 為 0
-    kernel_thread->state = THREAD_RUNNING;
-    kernel_thread->entry_point = NULL;
-    kernel_thread->next = NULL;
-
+    thread_t *first_thread = (thread_t *)dynamic_malloc(sizeof(thread_t));
+    first_thread->id = 0;  // kernel 線程的 ID 為 0
+    first_thread->state = THREAD_RUNNING;
+    first_thread->entry_point = NULL;
+    first_thread->next = NULL;
+    first_thread->user_code_start_pa=user_code_start_pa;
+    first_thread->thread_stack_alloc_kva=thread_stack_alloc_kva;
     // 保存當前 kernel 的堆疊指針
-    extern void * user_stack;
-    kernel_thread->thread_context.sp = user_stack;
-    kernel_thread->thread_context.fp = user_stack;
-    asm volatile("msr tpidr_el1, %0" : : "r"(kernel_thread));
-    
-    kernel_thread->fp = user_stack;
+    // extern void * user_stack;
+    // first_thread->thread_context.sp = user_stack;
+    // first_thread->thread_context.fp = user_stack;
+    //allocate first thread tpidr
+    asm volatile("msr tpidr_el1, %0" : : "r"(first_thread));
 
-    current_thread = kernel_thread;
-    add_to_run_queue(kernel_thread);
+
+    add_to_run_queue(first_thread);
     uart_send_string("First user initialized and Created.\r\n");
     //signal
     for (int i = 0; i < NSIG; i++) {
-        current_thread->sighand[i] = SIG_DFL;
+        first_thread->sighand[i] = SIG_DFL;
     }
-    current_thread->is_handling_signal=0;
-    current_thread->sigpending=0;
+    first_thread->is_handling_signal=0;
+    first_thread->sigpending=0;
 }
 thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     // Allocate memory for new thread
@@ -126,41 +130,37 @@ thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     new_thread->entry_point = entry_point;
     new_thread->next = NULL;
     
-    new_thread->thread_stack_alloc_ptr=dynamic_malloc(THREAD_STACK_SIZE);
-    void *stack_top = &new_thread->thread_stack_alloc_ptr[THREAD_STACK_SIZE];
     
-    new_thread->fp = stack_top;
-    
-    if (entry_point==NULL) { //fork
-        // fp will be overwritten in switch_to
-        new_thread->thread_context.fp = (uint64_t)stack_top;
-        uint32_t kernel_sp; 
-        asm volatile("mov %0, sp" : "=r"(kernel_sp));  
-        // sp & lr will be overwritten in switch_to
-        new_thread->thread_context.sp = (uint64_t)kernel_sp;
-        new_thread->thread_context.lr = (uint64_t)frame->elr_el1;
-        uart_send_string("new thread lr: ");
-        uart_send_hex(new_thread->thread_context.lr);
-        uart_send_string("\r\n");
-        //之後sp、lr也會再switch_to中進行修改
-        thread_inherit_save(frame, new_thread->thread_context);
-    }else{
-        new_thread->thread_context.fp = (uint64_t)stack_top;
-        new_thread->thread_context.sp = (uint64_t)stack_top;
-        new_thread->thread_context.lr = (uint64_t)entry_point;
-    }
+    // if (entry_point==NULL) { //fork
+    //     // fp will be overwritten in switch_to
+    //     new_thread->thread_context.fp = (uint64_t)stack_top;
+    //     uint32_t kernel_sp; 
+    //     asm volatile("mov %0, sp" : "=r"(kernel_sp));  
+    //     // sp & lr will be overwritten in switch_to
+    //     new_thread->thread_context.sp = (uint64_t)kernel_sp;
+    //     new_thread->thread_context.lr = (uint64_t)frame->elr_el1;
+    //     uart_send_string("new thread lr: ");
+    //     uart_send_hex(new_thread->thread_context.lr);
+    //     uart_send_string("\r\n");
+    //     //之後sp、lr也會再switch_to中進行修改
+    //     // thread_inherit_save(frame, new_thread->thread_context);
+    // }else{
+    //     new_thread->thread_context.fp = (uint64_t)stack_top;
+    //     new_thread->thread_context.sp = (uint64_t)stack_top;
+    //     new_thread->thread_context.lr = (uint64_t)entry_point;
+    // }
     
     // Add to thread list
     add_to_run_queue(new_thread);
-    //new_thread->context.sp = thread_sp-7*16;
-    uart_send_string("new thread fp: ");
-    uart_send_hex(new_thread->thread_context.fp);
-    uart_send_string("\r\n");
-    // thread_create_save(new_thread->thread_context.sp, new_thread->thread_context.fp, new_thread->thread_context.lr);
-    uart_send_string("new thread sp: ");
-    uart_send_hex(new_thread->thread_context.sp);
-    uart_send_string("\r\n");
-    //NSIG
+    // //new_thread->context.sp = thread_sp-7*16;
+    // uart_send_string("new thread fp: ");
+    // uart_send_hex(new_thread->thread_context.fp);
+    // uart_send_string("\r\n");
+    // // thread_create_save(new_thread->thread_context.sp, new_thread->thread_context.fp, new_thread->thread_context.lr);
+    // uart_send_string("new thread sp: ");
+    // uart_send_hex(new_thread->thread_context.sp);
+    // uart_send_string("\r\n");
+    //SIGnal
     for (int i = 0; i < NSIG; i++) {
         new_thread->sighand[i] = SIG_DFL;
     }
@@ -257,11 +257,10 @@ void schedule(int is_exit) {
     extern void switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
     switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);
 }
-void fork_schedule(uint64_t parent_sp, thread_t* child_thread) {
+void fork_schedule(trap_frame_t *frame, thread_t* child_thread) {
     //先不使用current_thread
-    trap_frame_t *frame = (trap_frame_t *)parent_sp;
-    uart_send_string("[fork_schedule] parent sp: ");
-    uart_send_hex(parent_sp);
+    uart_send_string("[fork_schedule] frame_address: ");
+    uart_send_hex((uint64_t)frame);
     uart_send_string("\r\n");
     if (!run_queue) {
         return;
@@ -345,28 +344,73 @@ void fork_schedule(uint64_t parent_sp, thread_t* child_thread) {
     // uart_send_string("\r\n");
     // uart_send_string("sp0: ");
     uint64_t sp0,elr_el1,spsr_el1;
-    uart_send_string("[fork_schedule]sp_el0: ");
-    asm volatile("mrs %0, sp_el0" : "=r"(sp0));
-    uart_send_hex(sp0);
-    uart_send_string("\r\n");
-    uart_send_string("[fork_schedule]elr_el1: ");
-    asm volatile("mrs %0, elr_el1" : "=r"(elr_el1));
-    uart_send_hex(elr_el1);
-    uart_send_string("\r\n");
-    uart_send_string("[fork_schedule]spsr_el1: ");
-    asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
-    uart_send_hex(spsr_el1);
-    uart_send_string("\r\n");
+    // uart_send_string("[fork_schedule]sp_el0: ");
+    // asm volatile("mrs %0, sp_el0" : "=r"(sp0));
+    // uart_send_hex(sp0);
+    // uart_send_string("\r\n");
+    // uart_send_string("[fork_schedule]elr_el1: ");
+    // asm volatile("mrs %0, elr_el1" : "=r"(elr_el1));
+    // uart_send_hex(elr_el1);
+    // uart_send_string("\r\n");
+    // uart_send_string("[fork_schedule]spsr_el1: ");
+    // asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
+    // uart_send_hex(spsr_el1);
+    // uart_send_string("\r\n");
     // uart_send_string("prev user fp: ");
     // uart_send_hex(prev->fp);
     // uart_send_string("\r\n");
     // uart_send_string("next user fp: ");
     // uart_send_hex(next->fp);
     // uart_send_string("\r\n");
-    memcpy((void *)(next->fp-THREAD_STACK_SIZE), (void *)(prev->fp-THREAD_STACK_SIZE), THREAD_STACK_SIZE);
-    asm volatile("msr sp_el0,%0 " : :"r"(next->thread_context.fp-((uint64_t)prev->fp-frame->sp_el0)));
+    // 1. 為新執行緒分配 PGD
+    uint64_t child_pgd_kva = (uint64_t)dynamic_malloc(PAGE_SIZE);
+    if (!child_pgd_kva) {
+        uart_send_string("Error:[fork_schedule] Failed to allocate PGD (KVA)!\r\n");
+        // 可能需要釋放 new_thread_kva
+        return;
+    }
+    uint64_t child_pgd_pa = KVA_TO_PHYS(child_pgd_kva);
+    memset((void*)child_pgd_kva, 0, PAGE_SIZE);
+    uart_send_string("[fork_schedule] Child PGD KVA: 0x"); uart_send_hex(child_pgd_kva);
+    uart_send_string(", Child PGD PA: 0x"); uart_send_hex(child_pgd_pa); uart_send_string("\r\n");
+    //2. map user code
+    if (mappages(child_pgd_pa, USER_CODE_VA, (uint64_t)user_space_size, (uint64_t)prev->user_code_start_pa, USER_CODE_ATTR) != 0) {
+        uart_send_string("Error:[fork_schedule] Failed to map user code!\r\n");
+        // Potentially free PGD and other allocated tables here
+        return;
+    }
+    uart_send_string("[fork_schedule] User code mapped: VA 0x0 to PA 0x"); uart_send_hex((uint64_t)prev->user_code_start_pa);
+    uart_send_string(" (size 0x"); uart_send_hex(user_space_size); uart_send_string(")\r\n");
+
+    
+    // 3. Allocate and map user stack (4 pages = 16KB)
+    uint64_t child_stack_kva = (uint64_t)dynamic_malloc(USER_STACK_SIZE);
+    if (!child_stack_kva) {
+        uart_send_string("Error:[thread_create] Failed to allocate stack backing KVA!\r\n");
+        return;
+    }
+    uint64_t child_stack_pa = KVA_TO_PHYS(child_stack_kva);
+    uart_send_string("[thread_create] Child stack backing KVA: 0x"); uart_send_hex(child_stack_kva);
+    uart_send_string("\r\n[thread_create]Child stack backing PA: 0x"); uart_send_hex(child_stack_pa); uart_send_string("\r\n");
+
+    if (mappages(child_pgd_pa, USER_STACK_BOTTOM_VA, USER_STACK_SIZE, child_stack_pa, USER_DATA_STACK_ATTR) != 0) {
+        uart_send_string("Error: [thread_create] Failed to map child stack!\r\n");
+        return;
+    }
+    uart_send_string("[thread_create] Child stack mapped: VA 0x"); uart_send_hex(USER_STACK_BOTTOM_VA);
+    uart_send_string(" - VA 0x"); uart_send_hex(USER_STACK_TOP_VA -1); uart_send_string("\r\n");
+    
+    //store new_thread information
+    current_thread->user_code_start_pa=prev->user_code_start_pa;
+    current_thread->thread_stack_alloc_kva=(void*)child_stack_kva;
+    //maybe don't need
+    void *stack_top = &current_thread->thread_stack_alloc_kva[USER_STACK_SIZE];
+    current_thread->fp = stack_top;
+    //stack memory copy
+    memcpy((void *)(current_thread->thread_stack_alloc_kva), (void *)(prev->thread_stack_alloc_kva), USER_STACK_SIZE);
+    // asm volatile("msr sp_el0,%0 " : :"r"(next->thread_context.fp-((uint64_t)prev->fp-frame->sp_el0)));
     //update frame->sp_el0 to child thread stack
-    frame->sp_el0=next->thread_context.fp-((uint64_t)prev->fp-frame->sp_el0);
+    // frame->sp_el0=(uint64_t)USER_STACK_TOP_VA-((uint64_t)USER_STACK_TOP_VA-frame->sp_el0);
     // uart_send_string("prev user fp: ");
     // uart_send_hex(frame->x29);
     // uart_send_string("\r\n");
@@ -377,21 +421,21 @@ void fork_schedule(uint64_t parent_sp, thread_t* child_thread) {
     //asm volatile("msr elr_el1,%0 " : :"r"(frame->elr_el1));
     //asm volatile("msr spsr_el1,%0 " : :"r"(0));
 
-    uart_send_string("sp0: ");
-    asm volatile("mrs %0, sp_el0" : "=r"(sp0));
-    uart_send_hex(sp0);
-    uart_send_string("\r\n");
-    uart_send_string("elr_el1: ");
-    asm volatile("mrs %0, elr_el1" : "=r"(elr_el1));
-    uart_send_hex(elr_el1);
-    uart_send_string("\r\n");
-    uart_send_string("spsr_el1: ");
-    asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
-    uart_send_hex(spsr_el1);
-    uart_send_string("\r\n");
+    // uart_send_string("sp0: ");
+    // asm volatile("mrs %0, sp_el0" : "=r"(sp0));
+    // uart_send_hex(sp0);
+    // uart_send_string("\r\n");
+    // uart_send_string("elr_el1: ");
+    // asm volatile("mrs %0, elr_el1" : "=r"(elr_el1));
+    // uart_send_hex(elr_el1);
+    // uart_send_string("\r\n");
+    // uart_send_string("spsr_el1: ");
+    // asm volatile("mrs %0, spsr_el1" : "=r"(spsr_el1));
+    // uart_send_hex(spsr_el1);
+    // uart_send_string("\r\n");
     // Call assembly function to switch context
-    extern void svc_switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
-    svc_switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);
+    // extern void svc_switch_to(thread_context_block_t *prev_context, thread_context_block_t *current_context, thread_t *current_thread);
+    // svc_switch_to(&prev->thread_context, &current_thread->thread_context, current_thread);
     // uart_send_string("[schedule] prev sp: ");
     // uart_send_hex(prev->thread_context.sp);
     // uart_send_string("\r\n");
@@ -410,6 +454,9 @@ void fork_schedule(uint64_t parent_sp, thread_t* child_thread) {
     // uart_send_string("[schedule] current lr: ");
     // uart_send_hex(current_thread->thread_context.lr);
     // uart_send_string("\r\n");
+    //adjust to child frame
+    frame->tpidr_el1=(uint64_t)current_thread;
+    frame->ttbr0_el1=child_pgd_pa;
     //store tpidr_el1
     change_tpidr(current_thread);
 
@@ -516,6 +563,7 @@ void save_trap_frame(trap_frame_t *frame, thread_t *thread) {
     thread->trap_frame.elr_el1=frame->elr_el1;
     thread->trap_frame.spsr_el1=frame->spsr_el1;
     thread->trap_frame.tpidr_el1=frame->tpidr_el1;
+    thread->trap_frame.ttbr0_el1=frame->ttbr0_el1;
 }
 void restore_trap_frame(trap_frame_t *frame, thread_t *thread) {
     frame->x0=thread->trap_frame.x0;
@@ -553,6 +601,7 @@ void restore_trap_frame(trap_frame_t *frame, thread_t *thread) {
     frame->elr_el1=thread->trap_frame.elr_el1;
     frame->spsr_el1=thread->trap_frame.spsr_el1;
     frame->tpidr_el1=thread->trap_frame.tpidr_el1;
+    frame->ttbr0_el1=thread->trap_frame.ttbr0_el1;
 }
 
 thread_t * find_thread_by_pid(int pid){
