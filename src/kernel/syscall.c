@@ -22,6 +22,9 @@ void handle_syscall(uint64_t kernel_sp) {
     uint64_t arg0 = frame->x0;
     uint64_t arg1 = frame->x1;
     uint64_t arg2 = frame->x2;
+    uint64_t arg3 = frame->x3;
+    uint64_t arg4 = frame->x4;
+    uint64_t arg5 = frame->x5;
     // ... 可以讀取更多參數 ...
 
     // uart_send_string("[handle_syscall] SYSCALL_NUM="); uart_send_int(syscall_number); uart_send_string("\r\n");
@@ -91,6 +94,17 @@ void handle_syscall(uint64_t kernel_sp) {
             // arg0 (frame->x0) is pid
             // arg1 (frame->x1) is SIGNAL number
             frame->x0 = sys_kill_signal((int)arg0, (int)arg1); // 避免與您之前的 sys_kill 混淆
+            break;
+        case SYS_MMAP:
+            frame->x0 = (uint64_t)sys_mmap(
+                (void*)arg0,      // addr
+                (size_t)arg1,     // len
+                (int)arg2,        // prot
+                (int)arg3,   // flags (arg3 from x3)
+                (int)arg4,   // fd (arg4 from x4)
+                (int)arg5,   // offset (arg5 from x5)
+                frame
+            );
             break;
         case SYS_SIGRETURN:
             // 此 system call 通常沒有參數，或者參數是隱含的 (trap frame)
@@ -196,7 +210,7 @@ int sys_exec(const char* name, char* const argv[],trap_frame_t *frame) {
     execute_thread->trap_frame.sp_el0=USER_STACK_TOP_VA;
     execute_thread->trap_frame.spsr_el1=0x0;
     execute_thread->trap_frame.tpidr_el1=execute_thread;
-    //ttbr0 already done at run_user_vm
+    //---ttbr0 already done at run_user_vm
     frame->elr_el1=execute_thread->trap_frame.elr_el1;
     frame->sp_el0=execute_thread->trap_frame.sp_el0;
     frame->spsr_el1=execute_thread->trap_frame.spsr_el1;
@@ -482,7 +496,150 @@ int sys_kill_signal(int pid, int signal_num) {
 
     return 0; // 成功
 }
+void* sys_mmap(void* addr_hint, size_t len, int prot, int flags, int fd, int file_offset, trap_frame_t *frame) {
+    uart_send_string("[sys_mmap] Called. Addr hint: 0x"); uart_send_hex((uint64_t)addr_hint);
+    uart_send_string(", Len: "); uart_send_hex(len);
+    uart_send_string("\r\n[sys_mmap]Prot: 0x"); uart_send_hex(prot);
+    uart_send_string(", Flags: 0x"); uart_send_hex(flags);
+    uart_send_string("\r\n");
 
+    if (len == 0) {
+        return MAP_FAILED; // 長度為0無效
+    }
+
+    // 只處理匿名映射
+    if (!(flags & MAP_ANONYMOUS)) {
+        uart_send_string("Error:[sys_mmap] Only MAP_ANONYMOUS is supported.\r\n");
+        return MAP_FAILED;
+    }
+
+    // 1. 長度頁對齊
+    uint64_t len_aligned = (len + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    if (len_aligned == 0) { // 如果原始 len 很小導致對齊後為0 (雖然不太可能，因為 PAGE_SIZE >=1)
+        return MAP_FAILED;
+    }
+
+    thread_t *current_process = get_current();
+    if (!current_process) {
+        uart_send_string("[sys_mmap] Error: Cannot get current process.\r\n");
+        return MAP_FAILED;
+    }
+
+    // 2. 決定虛擬起始位址 va_start
+    uint64_t va_start = 0;
+    int use_hint = 0;
+
+    if (addr_hint != NULL) {
+        uint64_t hint_aligned = (uint64_t)addr_hint;
+        // 檢查使用者提供的 addr_hint 是否頁對齊
+        if ((hint_aligned % PAGE_SIZE) == 0) {
+            // 檢查是否與現有 VMA 重疊 (簡化檢查，實際需要遍歷 VMA 列表)
+            // 這裡我們先假設如果提供了 addr_hint 且對齊，就嘗試使用它，
+            // 但實驗指導說如果重疊，核心自己決定。
+            // 為了簡化，如果 addr_hint 非 NULL 且對齊，我們先用它，
+            // 之後可以加入重疊檢查和重新選擇的邏輯。
+            // 嚴格按照指導：如果 addr_hint 非 NULL，先檢查。
+            // 這裡我們先簡化：如果 addr_hint 非 NULL 且對齊，就用它。
+            // 否則，核心決定。
+            va_start = hint_aligned;
+            use_hint = 1;
+            // TODO: 嚴格的重疊檢查邏輯
+            struct vm_area_struct *vma_iter = current_process->vma_list;
+            while (vma_iter) {
+                if (!( (va_start + len_aligned <= vma_iter->vm_start) || (va_start >= vma_iter->vm_end) )) {
+                    uart_send_string("[sys_mmap] Hint overlaps, kernel will decide.\r\n");
+                    use_hint = 0; // 重疊了，讓核心自己找
+                    va_start = 0;
+                    break;
+                }
+                vma_iter = vma_iter->vm_next;
+            }
+        } else {
+             uart_send_string("[sys_mmap] Hint address not page aligned, kernel will decide.\r\n");
+             use_hint = 0; // 未對齊，讓核心自己找
+        }
+    }
+
+    if (va_start == 0 || !use_hint) { // addr_hint 是 NULL，或者 hint 無效/重疊
+        va_start = find_available_vma_start(current_process, len_aligned);
+        if (va_start == 0) { // find_available_vma_start 返回 0 表示失敗
+            uart_send_string("[sys_mmap] Error: No available virtual address space found by kernel.\r\n");
+            return MAP_FAILED;
+        }
+    }
+    uart_send_string("[sys_mmap] Decided VA start: 0x"); uart_send_hex(va_start); uart_send_string("\r\n");
+
+    // 3. 創建並初始化新的 VMA 結構
+    struct vm_area_struct *new_vma = (struct vm_area_struct *)dynamic_malloc(sizeof(struct vm_area_struct));
+    if (!new_vma) {
+        uart_send_string("[sys_mmap] Error: Failed to allocate VMA struct.\r\n");
+        return MAP_FAILED;
+    }
+    new_vma->vm_start = va_start;
+    new_vma->vm_end = va_start + len_aligned;
+    new_vma->vm_size = len_aligned;
+    new_vma->vm_prot = prot;
+    new_vma->vm_flags = flags;
+    new_vma->vm_next = NULL; // 或插入到 current_process->vma_list
+    // new_vma->vm_prev = NULL;
+
+    // 將 new_vma 加入到行程的 VMA 列表中 (簡化：加到頭部)
+    // 實際應保持排序或使用更合適的資料結構
+    if (current_process->vma_list) {
+        new_vma->vm_next = current_process->vma_list;
+        // current_process->vma_list->vm_prev = new_vma; // 如果是雙向鏈結串列
+    }
+    current_process->vma_list = new_vma;
+    uart_send_string("[sys_mmap] New VMA created: VA 0x"); uart_send_hex(new_vma->vm_start);
+    uart_send_string(" - 0x"); uart_send_hex(new_vma->vm_end); uart_send_string("\r\n");
+
+    // 4. 處理 MAP_POPULATE (如果設定了，或者如果我們還沒做需求分頁，就預設 populate)
+    if (flags & MAP_POPULATE) { // 或者 !DEMAND_PAGING_ENABLED
+        uart_send_string("[sys_mmap] MAP_POPULATE: Allocating physical pages and mapping...\r\n");
+        uint64_t pte_attrs = get_pte_attributes_from_prot(prot, flags);
+        uint64_t current_mapping_va = new_vma->vm_start;
+        
+        for (uint64_t offset = 0; offset < new_vma->vm_size; offset += PAGE_SIZE) {
+            uint64_t page_frame_alloc_kva = (uint64_t)dynamic_malloc(PAGE_SIZE); // 分配KVA
+            if (!page_frame_alloc_kva) {
+                uart_send_string("[sys_mmap] Error: Failed to allocate page frame KVA for MAP_POPULATE.\r\n");
+                // TODO: 這裡應該回滾，釋放已分配的 VMA 和頁框，然後返回 MAP_FAILED
+                // 為了簡化，我們先直接返回失敗
+                dynamic_free(new_vma); // 釋放 VMA 結構
+                // 這裡還應該釋放這個 VMA 已經分配並映射的頁框
+                return MAP_FAILED;
+            }
+            // 對於匿名映射，新分配的頁框內容應該是全零
+            memset((void*)page_frame_alloc_kva, 0, PAGE_SIZE); // 使用 KVA 清零
+
+            uint64_t page_frame_pa = KVA_TO_PHYS(page_frame_alloc_kva); // KVA -> PA
+
+            if (mappages(get_current_ttbr0_el1(), // 使用者 PGD 的實體位址
+                         current_mapping_va,        // 目前要映射的使用者虛擬頁面
+                         PAGE_SIZE,                 // 映射大小 (一頁)
+                         page_frame_pa,             // 對應的實體頁框 PA
+                         pte_attrs) != 0) {
+                uart_send_string("[sys_mmap] Error: mappages failed for VA 0x");
+                uart_send_hex(current_mapping_va); uart_send_string(" during MAP_POPULATE.\r\n");
+                // TODO: 回滾
+                dynamic_free((void*)page_frame_alloc_kva); // 釋放剛分配的頁框 KVA
+                dynamic_free(new_vma);                 // 釋放 VMA 結構
+                return MAP_FAILED;
+            }
+            current_mapping_va += PAGE_SIZE;
+        }
+        uart_send_string("[sys_mmap] MAP_POPULATE finished.\r\n");
+    } else {
+        // 如果沒有 MAP_POPULATE，並且你正在實作需求分頁，
+        // 這裡就不需要分配實體頁框和映射。
+        // 只需要確保 VMA 結構被記錄下來，PTE 可以保持無效，
+        // 等待 Page Fault Handler 來處理。
+        uart_send_string("[sys_mmap] MAP_ANONYMOUS without MAP_POPULATE. Deferring page allocation.\r\n");
+    }
+
+    // 5. 返回新區域的起始虛擬位址
+    return (void*)new_vma->vm_start;
+}
 void sys_sigreturn(trap_frame_t *current_handler_frame) {
     thread_t *current = get_current();
 

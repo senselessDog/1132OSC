@@ -235,7 +235,7 @@ void run_user_vm(char *archive_kva_addr) {
     // Kernel should not reach here after eret if switch is successful
     // uart_send_string("Error: Returned from switch_to_el0_vm unexpectedly!\r\n");
 }
-
+//To clear TLB and set next_pgd_phys_addr
 void switch_user_address_space(uint64_t next_pgd_phys_addr) {
     // uart_send_string("[MMU] Switching user address space to PGD PA: 0x");
     // uart_send_hex(next_pgd_phys_addr);
@@ -271,4 +271,72 @@ void switch_user_address_space(uint64_t next_pgd_phys_addr) {
     asm volatile("isb" : : : "memory");
 
     // uart_send_string("[MMU] User address space switched.\r\n");
+}
+
+// [For mmap]將 mmap 的 prot 旗標轉換為我們 PTE 的屬性
+// 注意：這需要與你的 USER_CODE_ATTR, USER_DATA_STACK_ATTR 等定義的位元對應起來
+uint64_t get_pte_attributes_from_prot(int prot, int flags) {
+    uint64_t attributes = PD_PAGE | PD_ACCESS ; // 基本屬性
+
+    // 記憶體類型 (假設匿名頁面都是 Normal Non-Cacheable)
+    attributes |= (MAIR_IDX_NORMAL_NOCACHE << 2);
+
+    // 存取權限 (AP bits for EL0)
+    if (prot & PROT_WRITE) {
+        attributes |= PD_USER_ACCESS; // EL0 R/W (0b01 << 6)
+    } else if (prot & PROT_READ) {
+        attributes |= (0b11UL << 6);  // EL0 R/O (0b11 << 6)
+    } else {
+        // 如果 PROT_NONE，則不設定 AP[1] (AP[2:1]=0b00)，但這通常還需要其他位元來完全禁止存取
+        // 這裡簡化，如果沒有 READ，就認為是不可存取 (或者你可以定義一個 PROT_NONE 的專用屬性)
+    }
+
+    // 執行權限
+    if (prot & PROT_EXEC) {
+        // UXN 必須為 0 (不設定 PD_UXN)
+    } else {
+        attributes |= PD_UXN; // 不可執行
+    }
+    attributes |= PD_PXN; // 核心不應執行使用者 mmap 的區域
+
+    return attributes;
+}
+
+// 在行程的 VMA 列表中尋找一個可用的虛擬位址區域的起始位址
+
+uint64_t find_available_vma_start(thread_t *process, size_t length_aligned) {
+    uint64_t current_search_addr = USER_VMA_AREA_START;
+    struct vm_area_struct *vma = process->vma_list; // 假設 vma_list 是按起始位址排序的
+
+    if (!vma) { // 如果沒有 VMA，直接返回起始搜尋位址
+        if (USER_VMA_AREA_START + length_aligned <= USER_VMA_AREA_END) {
+            return USER_VMA_AREA_START;
+        } else {
+            uart_send_string("Error: [find_available_vma_start] Address is not enough\r\n");
+            return 0; // 空間不足
+        }
+    }
+
+    // 檢查 USER_VMA_AREA_START 到第一個 VMA 之間的空間
+    if (vma->vm_start >= current_search_addr + length_aligned) {
+        return current_search_addr;
+    }
+    current_search_addr = vma->vm_end; // 從第一個 VMA 的結束處開始找
+
+    while (vma->vm_next) {
+        // 檢查目前 VMA 和下一個 VMA 之間的空隙
+        if (vma->vm_next->vm_start >= current_search_addr + length_aligned) {
+            return current_search_addr; // 找到足夠的空間
+        }
+        current_search_addr = vma->vm_next->vm_end;
+        vma = vma->vm_next;
+    }
+
+    // 檢查最後一個 VMA 之後的空間
+    if (USER_VMA_AREA_END >= current_search_addr + length_aligned) {
+        return current_search_addr;
+    }
+
+    uart_send_string("[find_available_vma_start] No suitable VMA region found.\r\n");
+    return 0; // 沒有找到合適的空間 (返回 0 表示失敗)
 }

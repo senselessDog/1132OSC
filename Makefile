@@ -90,7 +90,7 @@ qemu_video:
 	# # 啟用 USB 滑鼠（可選）
 	# # 將串口輸出重定向到終端（方便調試）
 show_qemu:
-	sudo minicom -D /dev/pts/6 -b 115200
+	sudo minicom -D /dev/pts/7 -b 115200
 gdb_init:
 	gdb-multiarch -x .gdbinit
 python:

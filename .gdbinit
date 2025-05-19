@@ -41,7 +41,7 @@ define kernel
   # b map_framebuffer_for_user
   # b default_exception_handler
   b find_thread_by_pid
-  b check_signals
+  # b check_signals
   b sys_sigreturn
   # b mmu.c:30
   #b simple_alloc

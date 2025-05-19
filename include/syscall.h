@@ -2,8 +2,8 @@
 #define SYSCALL_H
 
 #include <stddef.h> 
-typedef struct {
-    int64_t x0, x1;   // 16 * 0
+typedef struct trap_frame{
+    uint64_t x0, x1;   // 16 * 0
     uint64_t x2, x3;   // 16 * 1
     uint64_t x4, x5;   // 16 * 2
     uint64_t x6, x7;   // 16 * 3

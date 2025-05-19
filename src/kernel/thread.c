@@ -108,13 +108,14 @@ void thread_init_user(void* user_code_start_pa,void* thread_stack_alloc_kva) {
 
 
     add_to_run_queue(first_thread);
-    uart_send_string("First user initialized and Created.\r\n");
+    setupInit_vma(first_thread);
     //signal
     for (int i = 0; i < NSIG; i++) {
         first_thread->sighand[i] = SIG_DFL;
     }
     first_thread->is_handling_signal=0;
     first_thread->sigpending=0;
+    uart_send_string("First user initialized and Created.\r\n");
 }
 thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     // Allocate memory for new thread
@@ -129,8 +130,7 @@ thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     new_thread->state = THREAD_READY;
     new_thread->entry_point = entry_point;
     new_thread->next = NULL;
-    
-    
+    setupInit_vma(new_thread);
     // if (entry_point==NULL) { //fork
     //     // fp will be overwritten in switch_to
     //     new_thread->thread_context.fp = (uint64_t)stack_top;
@@ -628,4 +628,27 @@ thread_t * find_thread_by_pid(int pid){
         next = next->next;
     }
     return next;
+}
+void setupInit_vma(thread_t* thread){
+        //for new_vma overlap
+    //user code
+    struct vm_area_struct *code_vma = (struct vm_area_struct *)dynamic_malloc(sizeof(struct vm_area_struct));
+    code_vma->vm_start = USER_CODE_VA;
+    code_vma->vm_end = USER_CODE_VA+user_space_size;
+    code_vma->vm_size = user_space_size;
+    if (thread->vma_list) {
+        code_vma->vm_next = thread->vma_list;
+        // current_process->vma_list->vm_prev = new_vma; // 如果是雙向鏈結串列
+    }
+    thread->vma_list = code_vma;
+    //user stack
+    struct vm_area_struct *stack_vma = (struct vm_area_struct *)dynamic_malloc(sizeof(struct vm_area_struct));
+    stack_vma->vm_start = USER_STACK_BOTTOM_VA;
+    stack_vma->vm_end = USER_STACK_TOP_VA;
+    stack_vma->vm_size = USER_STACK_SIZE;
+    if (thread->vma_list) {
+        stack_vma->vm_next = thread->vma_list;
+        // new_thread->vma_list->vm_prev = new_vma; // 如果是雙向鏈結串列
+    }
+    thread->vma_list = stack_vma;
 }

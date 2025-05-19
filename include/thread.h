@@ -22,7 +22,7 @@ typedef struct {
     uint64_t fp,lr;  // 16 * 5
     uint64_t sp,base_addr;  // 16 * 6
 } thread_context_block_t;
-
+struct vm_area_struct; 
 //singal number
 #define NSIG 32
 typedef struct thread{
@@ -43,6 +43,8 @@ typedef struct thread{
     trap_frame_t signal_backup_frame;    // 用於備份執行 user-mode handler 前的原始 trap frame。
     int is_handling_signal;              // 標誌位，表示當前是否正在執行一個 user-mode signal handler (避免嵌套)。
     void * handler_stack_ptr;
+    //for mmap
+    struct vm_area_struct *vma_list; // 指向 VMA 鏈結串列的頭部
 } thread_t;
 
 // --- System Call Numbers ---
@@ -57,7 +59,8 @@ typedef struct thread{
 //singal
 #define SYS_SIGNAL      8
 #define SYS_KILL_SIG    9
-#define SYS_SIGRETURN   10
+#define SYS_MMAP        10
+#define SYS_SIGRETURN   11
 // Add more if needed, e.g., for signals later
 
 // Thread management functions
@@ -77,7 +80,7 @@ void thread_test(void);
 void save_trap_frame(trap_frame_t *frame, thread_t *thread);
 void restore_trap_frame(trap_frame_t *frame, thread_t *thread);
 thread_t * find_thread_by_pid(int pid);
-
+thread_t* get_current(void); // 假設這個函數已存在
 // // --- External assembly functions ---
 // extern void switch_to(kcontext_t *prev_ctx, kcontext_t *next_ctx);
 // extern thread_t *get_current(void); // Gets current thread TCB pointer from TPIDR_EL1

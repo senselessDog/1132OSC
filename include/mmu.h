@@ -1,5 +1,7 @@
 #ifndef MMU_H_GUARD // 防止重複包含的標準做法
 #define MMU_H_GUARD
+
+
 //virtual physic offset for kernel
 #define kernel_virtual_offset 0xffff000000000000
 
@@ -93,6 +95,27 @@
 #ifndef KVA_TO_PHYS
 #define KVA_TO_PHYS(kva) ((uint64_t)((uint64_t)(kva) - kernel_virtual_offset))
 #endif
+// --- mmap 相關定義 ---
+// Protection flags (來自 sys/mman.h 的常見值)
+#define PROT_NONE       0x00    // Page can not be accessed
+#define PROT_READ       0x01    // Page can be read
+#define PROT_WRITE      0x02    // Page can be written
+#define PROT_EXEC       0x04    // Page can be executed
+
+// Flags for mmap (來自 sys/mman.h 的常見值)
+#define MAP_ANONYMOUS   0x20    // Don't use a file. The mapping is not backed by any file; 
+                                // its contents are initialized to zero.
+                                // (有些系統也用 MAP_ANON)
+#define MAP_PRIVATE     0x02    // Create a private copy-on-write mapping.
+                                // (Lab 6 進階練習3會用到類似概念，但 mmap 本身可以先不處理 COW)
+#define MAP_FIXED       0x10    // Interpret addr exactly. (你的實驗指導似乎不要求嚴格的 MAP_FIXED)
+#define MAP_POPULATE    0x8000  // Populate (prefault) page tables. (實驗要求)
+
+#define MAP_FAILED      ((void *)-1) // mmap 失敗的返回值
+
+// 假設使用者空間的低位址從某個 USER_VMA_AREA_START 開始
+#define USER_VMA_AREA_START 0x0000000010000000UL // 範例：從 256MB 虛擬位址開始尋找
+#define USER_VMA_AREA_END   0x0000000020000000UL // 範例：到 512GB 虛擬位址結束 (給 VMA 留出約 2.25GB
 // 這部分是 C 語言特有的宣告，組合器不應該看到
 #ifndef __ASSEMBLER__
 #include <stdint.h>
@@ -108,6 +131,30 @@ void el0_core_timer_enable(void);
 int mappages(uint64_t pgd_phys, uint64_t va_start, uint64_t size, uint64_t pa_start, uint64_t attributes);
 void run_user_vm(char *archive_va);
 void switch_user_address_space(uint64_t next_pgd_phys_addr);
+//mmap
+struct vm_area_struct {
+    uint64_t vm_start;          // 區域的起始虛擬位址 (頁對齊)
+    uint64_t vm_end;            // 區域的結束虛擬位址 (vm_start + size, 頁對齊)
+    uint64_t vm_size;           // 區域大小 (vm_end - vm_start)
+    int vm_prot;               // 保護屬性 (PROT_READ, PROT_WRITE, PROT_EXEC)
+    int vm_flags;              // 旗標 (例如 MAP_ANONYMOUS)
+    // struct file *vm_file;    // 對應的檔案 (匿名映射時為 NULL)
+    // unsigned long vm_pgoff;  // 在檔案中的位移 (頁為單位)
+    struct vm_area_struct *vm_next; // 指向行程的下一個 VMA
+    struct vm_area_struct *vm_prev; // 指向行程的上一個 VMA (如果用雙向鏈結串列)
+};
+struct thread;
+typedef struct thread thread_t;
+struct trap_frame;
+typedef struct trap_frame trap_frame_t;
+// mmap 系統呼叫的處理函式原型
+void* sys_mmap(void* addr, size_t len, int prot, int flags, int fd, int file_offset, trap_frame_t *frame);
+
+// 輔助函數：將 prot 轉換為 PTE 屬性
+uint64_t get_pte_attributes_from_prot(int prot, int flags);
+
+// 輔助函數：在行程的 VMA 列表中尋找一個可用的虛擬位址區域
+uint64_t find_available_vma_start(thread_t *process, size_t length);
 #endif /* __ASSEMBLER__ */
 
 #endif /* MMU_H_GUARD */
