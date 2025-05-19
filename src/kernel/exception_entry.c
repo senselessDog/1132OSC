@@ -31,12 +31,16 @@ uint32_t is_uart_interrupt()
 void sync_lower_el_64_entry(uint64_t parent_sp)
 {
     
-    uint64_t esr;
+    uint64_t esr, far;
     asm volatile("mrs %0, esr_el1" : "=r"(esr));     // 讀取 ESR_EL1
+    asm volatile("mrs %0, far_el1": "=r"(far));
     unsigned int ec = (esr >> 26) & 0x3f;           // 取得 Exception Class
     // uart_send_string("\r\nESR_EL1: 0x");
     // uart_send_hex(esr);
     // uart_send_string("\r\n");
+    // uart_send_string("Fault Address Register (FAR_EL1): 0x");
+    // uart_send_hex(far);
+    // uart_send_string("\r\n------------------------\r\n");
     if (ec == 0b010101) { // 判斷是不是 SVC
         handle_syscall(parent_sp);
         // uint64_t tmp;

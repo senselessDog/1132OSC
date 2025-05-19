@@ -95,11 +95,17 @@ int mailbox_call_lowlevel(unsigned char ch, volatile unsigned int *kernel_mbox) 
     // 在沒有 MMU 的情況下，我們假設 kernel_mbox 的虛擬位址就是實體位址
     // 你的 & ~0xF 操作確保了對齊，但前提是 kernel_mbox 指標本身是對齊的
     uint64_t addr = (uint64_t)(uintptr_t)kernel_mbox;
+    uart_send_string("[mailbox_call_lowlevel] addr=");
+    uart_send_hex(addr);
+    uart_send_string("\r\n");
     if (addr & 0xF) { // 檢查是否 16 位元組對齊
          uart_send_string("Error: [mailbox_call_lowlevel] buffer not 16-byte aligned.\r\n");
          return -1;
     }
     uint64_t value = addr | (ch & 0xF); // 使用傳入的 channel
+    uart_send_string("[mailbox_call_lowlevel] value=");
+    uart_send_hex(value);
+    uart_send_string("\r\n");
     // uart_send_string("[mailbox_call_lowlevel] MAILBOX_STATUS=");
     // uart_send_hex(MAILBOX_STATUS);
     // uart_send_string("\r\n");

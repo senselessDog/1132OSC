@@ -361,9 +361,14 @@ int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
     // uart_send_string("[sys_mbox_call] Sucess finish kernel mailbox buffer...\r\n");
     //8. mappings
     volatile unsigned int *mailbox=(volatile unsigned int *)kernel_mbox;
+    //convert GPU address to ARM address
+    mailbox[28] &= 0x3FFFFFFF;
     uint64_t frame_buffer_start_pa=(uint64_t)mailbox[28];
     uint64_t frame_buffer_size=(uint64_t)mailbox[29];
     uint64_t user_pgd_pa=get_current_ttbr0_el1();
+    uart_send_string("[sys_mbox_call] Frame_buffer address=");
+    uart_send_int(frame_buffer_start_pa);
+    uart_send_string("\r\n");
     uart_send_string("[sys_mbox_call] user_pgd_pa=");
     uart_send_int(user_pgd_pa);
     uart_send_string("\r\n");
