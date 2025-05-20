@@ -386,10 +386,24 @@ int sys_mbox_call(unsigned char ch, unsigned int* user_mbox) {
     uart_send_string("[sys_mbox_call] user_pgd_pa=");
     uart_send_int(user_pgd_pa);
     uart_send_string("\r\n");
-    if (map_framebuffer_for_user(user_pgd_pa,frame_buffer_start_pa, frame_buffer_size, frame_buffer_start_pa)!=1){
-        uart_send_string("Error: [sys_mbox_call] Can't map framebuffer to VA\r\n");
-        return 0;
+    //set vma
+    thread_t* current_process=get_current();
+    struct vm_area_struct *frame_buffer_vma = (struct vm_area_struct *)dynamic_malloc(sizeof(struct vm_area_struct));
+    frame_buffer_vma->vm_area_tag = VMA_AREA_FRAMEBUFFER;
+    frame_buffer_vma->vm_start = frame_buffer_start_pa;
+    frame_buffer_vma->vm_end = frame_buffer_start_pa + frame_buffer_size;
+    frame_buffer_vma->vm_size = frame_buffer_size;
+    frame_buffer_vma->vm_prot = USER_FRAMEBUFFER_ATTR;
+    frame_buffer_vma->vm_flags = MAP_ANONYMOUS;
+    frame_buffer_vma->vm_next = NULL;
+    if (current_process->vma_list) {
+        frame_buffer_vma->vm_next = current_process->vma_list;
     }
+    current_process->vma_list = frame_buffer_vma;
+    // if (map_framebuffer_for_user(user_pgd_pa,frame_buffer_start_pa, frame_buffer_size, frame_buffer_start_pa)!=1){
+    //     uart_send_string("Error: [sys_mbox_call] Can't map framebuffer to VA\r\n");
+    //     return 0;
+    // }
     uart_send_string("[sys_mbox_call] result=");
     uart_send_int(result);
     uart_send_string("\r\n");
@@ -533,14 +547,7 @@ void* sys_mmap(void* addr_hint, size_t len, int prot, int flags, int fd, int fil
         uint64_t hint_aligned = (uint64_t)addr_hint;
         // 檢查使用者提供的 addr_hint 是否頁對齊
         if ((hint_aligned % PAGE_SIZE) == 0) {
-            // 檢查是否與現有 VMA 重疊 (簡化檢查，實際需要遍歷 VMA 列表)
-            // 這裡我們先假設如果提供了 addr_hint 且對齊，就嘗試使用它，
-            // 但實驗指導說如果重疊，核心自己決定。
-            // 為了簡化，如果 addr_hint 非 NULL 且對齊，我們先用它，
-            // 之後可以加入重疊檢查和重新選擇的邏輯。
-            // 嚴格按照指導：如果 addr_hint 非 NULL，先檢查。
-            // 這裡我們先簡化：如果 addr_hint 非 NULL 且對齊，就用它。
-            // 否則，核心決定。
+            // 檢查是否與現有 VMA 重疊 (簡化檢查，實際需要遍歷 VMA 列表)，或unaligned，就由kernel自己決定。
             va_start = hint_aligned;
             use_hint = 1;
             // TODO: 嚴格的重疊檢查邏輯
@@ -575,6 +582,7 @@ void* sys_mmap(void* addr_hint, size_t len, int prot, int flags, int fd, int fil
         uart_send_string("[sys_mmap] Error: Failed to allocate VMA struct.\r\n");
         return MAP_FAILED;
     }
+    new_vma->vm_area_tag = VMA_AREA_NONE;
     new_vma->vm_start = va_start;
     new_vma->vm_end = va_start + len_aligned;
     new_vma->vm_size = len_aligned;
@@ -594,7 +602,13 @@ void* sys_mmap(void* addr_hint, size_t len, int prot, int flags, int fd, int fil
     uart_send_string(" - 0x"); uart_send_hex(new_vma->vm_end); uart_send_string("\r\n");
 
     // 4. 處理 MAP_POPULATE (如果設定了，或者如果我們還沒做需求分頁，就預設 populate)
-    if (flags & MAP_POPULATE) { // 或者 !DEMAND_PAGING_ENABLED
+    if(flags & MAP_ANONYMOUS){
+        // 如果沒有 MAP_POPULATE，並且你正在實作需求分頁，
+        // 這裡就不需要分配實體頁框和映射。
+        // 只需要確保 VMA 結構被記錄下來，PTE 可以保持無效，
+        // 等待 Page Fault Handler 來處理。
+        uart_send_string("[sys_mmap] MAP_ANONYMOUS without MAP_POPULATE. Deferring page allocation.\r\n");
+    }else if (flags & MAP_POPULATE) { // 或者 !DEMAND_PAGING_ENABLED
         uart_send_string("[sys_mmap] MAP_POPULATE: Allocating physical pages and mapping...\r\n");
         uint64_t pte_attrs = get_pte_attributes_from_prot(prot, flags);
         uint64_t current_mapping_va = new_vma->vm_start;
@@ -629,12 +643,6 @@ void* sys_mmap(void* addr_hint, size_t len, int prot, int flags, int fd, int fil
             current_mapping_va += PAGE_SIZE;
         }
         uart_send_string("[sys_mmap] MAP_POPULATE finished.\r\n");
-    } else {
-        // 如果沒有 MAP_POPULATE，並且你正在實作需求分頁，
-        // 這裡就不需要分配實體頁框和映射。
-        // 只需要確保 VMA 結構被記錄下來，PTE 可以保持無效，
-        // 等待 Page Fault Handler 來處理。
-        uart_send_string("[sys_mmap] MAP_ANONYMOUS without MAP_POPULATE. Deferring page allocation.\r\n");
     }
 
     // 5. 返回新區域的起始虛擬位址

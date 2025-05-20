@@ -29,6 +29,8 @@ typedef struct thread{
     int id;
     thread_state_t state;
     void (*entry_point)(void);
+    void* initrootfs_code_address;
+    uint64_t initrootfs_code_size;
     void* thread_stack_alloc_kva;
     void* user_code_start_pa;
     thread_context_block_t thread_context;
@@ -80,7 +82,6 @@ void thread_test(void);
 void save_trap_frame(trap_frame_t *frame, thread_t *thread);
 void restore_trap_frame(trap_frame_t *frame, thread_t *thread);
 thread_t * find_thread_by_pid(int pid);
-thread_t* get_current(void); // 假設這個函數已存在
 // // --- External assembly functions ---
 // extern void switch_to(kcontext_t *prev_ctx, kcontext_t *next_ctx);
 // extern thread_t *get_current(void); // Gets current thread TCB pointer from TPIDR_EL1

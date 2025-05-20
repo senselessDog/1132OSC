@@ -374,30 +374,30 @@ void fork_schedule(trap_frame_t *frame, thread_t* child_thread) {
     uart_send_string("[fork_schedule] Child PGD KVA: 0x"); uart_send_hex(child_pgd_kva);
     uart_send_string(", Child PGD PA: 0x"); uart_send_hex(child_pgd_pa); uart_send_string("\r\n");
     //2. map user code
-    if (mappages(child_pgd_pa, USER_CODE_VA, (uint64_t)user_space_size, (uint64_t)prev->user_code_start_pa, USER_CODE_ATTR) != 0) {
-        uart_send_string("Error:[fork_schedule] Failed to map user code!\r\n");
-        // Potentially free PGD and other allocated tables here
-        return;
-    }
-    uart_send_string("[fork_schedule] User code mapped: VA 0x0 to PA 0x"); uart_send_hex((uint64_t)prev->user_code_start_pa);
-    uart_send_string(" (size 0x"); uart_send_hex(user_space_size); uart_send_string(")\r\n");
+    // if (mappages(child_pgd_pa, USER_CODE_VA, (uint64_t)user_space_size, (uint64_t)prev->user_code_start_pa, USER_CODE_ATTR) != 0) {
+    //     uart_send_string("Error:[fork_schedule] Failed to map user code!\r\n");
+    //     // Potentially free PGD and other allocated tables here
+    //     return;
+    // }
+    // uart_send_string("[fork_schedule] User code mapped: VA 0x0 to PA 0x"); uart_send_hex((uint64_t)prev->user_code_start_pa);
+    // uart_send_string(" (size 0x"); uart_send_hex(user_space_size); uart_send_string(")\r\n");
 
     
     // 3. Allocate and map user stack (4 pages = 16KB)
     uint64_t child_stack_kva = (uint64_t)dynamic_malloc(USER_STACK_SIZE);
     if (!child_stack_kva) {
-        uart_send_string("Error:[thread_create] Failed to allocate stack backing KVA!\r\n");
+        uart_send_string("Error:[fork_schedule] Failed to allocate stack backing KVA!\r\n");
         return;
     }
     uint64_t child_stack_pa = KVA_TO_PHYS(child_stack_kva);
-    uart_send_string("[thread_create] Child stack backing KVA: 0x"); uart_send_hex(child_stack_kva);
-    uart_send_string("\r\n[thread_create]Child stack backing PA: 0x"); uart_send_hex(child_stack_pa); uart_send_string("\r\n");
+    uart_send_string("[fork_schedule] Child stack backing KVA: 0x"); uart_send_hex(child_stack_kva);
+    uart_send_string("\r\n[fork_schedule]Child stack backing PA: 0x"); uart_send_hex(child_stack_pa); uart_send_string("\r\n");
 
-    if (mappages(child_pgd_pa, USER_STACK_BOTTOM_VA, USER_STACK_SIZE, child_stack_pa, USER_DATA_STACK_ATTR) != 0) {
-        uart_send_string("Error: [thread_create] Failed to map child stack!\r\n");
-        return;
-    }
-    uart_send_string("[thread_create] Child stack mapped: VA 0x"); uart_send_hex(USER_STACK_BOTTOM_VA);
+    // if (mappages(child_pgd_pa, USER_STACK_BOTTOM_VA, USER_STACK_SIZE, child_stack_pa, USER_DATA_STACK_ATTR) != 0) {
+    //     uart_send_string("Error: [fork_schedule] Failed to map child stack!\r\n");
+    //     return;
+    // }
+    uart_send_string("[fork_schedule] Child stack mapped: VA 0x"); uart_send_hex(USER_STACK_BOTTOM_VA);
     uart_send_string(" - VA 0x"); uart_send_hex(USER_STACK_TOP_VA -1); uart_send_string("\r\n");
     
     //store new_thread information
@@ -633,22 +633,27 @@ void setupInit_vma(thread_t* thread){
         //for new_vma overlap
     //user code
     struct vm_area_struct *code_vma = (struct vm_area_struct *)dynamic_malloc(sizeof(struct vm_area_struct));
+    code_vma->vm_area_tag = VMA_AREA_CODE;
     code_vma->vm_start = USER_CODE_VA;
     code_vma->vm_end = USER_CODE_VA+user_space_size;
     code_vma->vm_size = user_space_size;
+    code_vma->vm_prot = PROT_READ | PROT_EXEC;
+    code_vma->vm_flags = MAP_ANONYMOUS; // 標記為匿名（因為不是透過 mmap file 來的）
     if (thread->vma_list) {
+        uart_send_string("[setupInit_vma] first vma\r\n");
         code_vma->vm_next = thread->vma_list;
-        // current_process->vma_list->vm_prev = new_vma; // 如果是雙向鏈結串列
     }
     thread->vma_list = code_vma;
     //user stack
     struct vm_area_struct *stack_vma = (struct vm_area_struct *)dynamic_malloc(sizeof(struct vm_area_struct));
+    stack_vma->vm_area_tag = VMA_AREA_STACK;
     stack_vma->vm_start = USER_STACK_BOTTOM_VA;
     stack_vma->vm_end = USER_STACK_TOP_VA;
     stack_vma->vm_size = USER_STACK_SIZE;
+    stack_vma->vm_prot = PROT_READ | PROT_WRITE;
+    stack_vma->vm_flags = MAP_ANONYMOUS;
     if (thread->vma_list) {
         stack_vma->vm_next = thread->vma_list;
-        // new_thread->vma_list->vm_prev = new_vma; // 如果是雙向鏈結串列
     }
     thread->vma_list = stack_vma;
 }

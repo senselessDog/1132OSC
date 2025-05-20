@@ -25,6 +25,7 @@ uint64_t* walk_and_create_pte(uint64_t pgd_pa, uint64_t va, int alloc) {
                 uart_send_string("[walk] No alloc and table entry missing.\r\n");
                 return NULL;
             }
+            //alloc new nable
             next_table_alloc_kva = (uint64_t)dynamic_malloc(PAGE_SIZE);
             if (!next_table_alloc_kva) {
                 uart_send_string("[walk] dynamic_malloc for new table failed.\r\n");
@@ -189,13 +190,16 @@ void run_user_vm(char *archive_kva_addr) {
     // void *user_stack=user_base+user_space_size;
     
     memcpy((void*)user_base_kva,(const void *)program_info.filecontext, (uint32_t)program_info.filesize);
-    if (mappages(user_pgd_pa, USER_CODE_VA, (uint64_t)user_space_size, user_base_pa, USER_CODE_ATTR) != 0) {
-        uart_send_string("[run_user_vm] Failed to map user code!\r\n");
-        // Potentially free PGD and other allocated tables here
-        return;
-    }
-    uart_send_string("[run_user_vm] User code mapped: VA 0x0 to PA 0x"); uart_send_hex((uint64_t)user_base_pa);
-    uart_send_string(" (size 0x"); uart_send_hex(user_space_size); uart_send_string(")\r\n");
+    uart_send_string("[run_user_vm] pte_attributes=");
+    uart_send_hex(USER_CODE_ATTR);
+    uart_send_string("\r\n");
+    // if (mappages(user_pgd_pa, USER_CODE_VA, (uint64_t)user_space_size, user_base_pa, USER_CODE_ATTR) != 0) {
+    //     uart_send_string("[run_user_vm] Failed to map user code!\r\n");
+    //     // Potentially free PGD and other allocated tables here
+    //     return;
+    // }
+    // uart_send_string("[run_user_vm] User code mapped: VA 0x0 to PA 0x"); uart_send_hex((uint64_t)user_base_pa);
+    // uart_send_string(" (size 0x"); uart_send_hex(user_space_size); uart_send_string(")\r\n");
 
 
     // 3. Allocate and map user stack (4 pages = 16KB)
@@ -205,17 +209,17 @@ void run_user_vm(char *archive_kva_addr) {
     }
     uint64_t user_stack_pa = KVA_TO_PHYS(user_stack_kva);
     // No need to memset stack pages, user program will use them.
-    uart_send_string("[run_user_vm]User stack page ");
-    uart_send_string(" allocated at PA: 0x"); uart_send_hex(user_stack_pa); uart_send_string("\r\n");
+    // uart_send_string("[run_user_vm]User stack page ");
+    // uart_send_string(" allocated at PA: 0x"); uart_send_hex(user_stack_pa); uart_send_string("\r\n");
 
-        // Map this single page
-        // Stack grows downwards, so USER_STACK_BOTTOM_VA is the start of the VA range.
-        // We map pa_pages[0] to USER_STACK_BOTTOM_VA, pa_pages[1] to USER_STACK_BOTTOM_VA + PAGE_SIZE, etc.
-    if (mappages(user_pgd_pa, USER_STACK_BOTTOM_VA, USER_STACK_SIZE, user_stack_pa, USER_DATA_STACK_ATTR) != 0) {
-        uart_send_string("Error: [run_user_vm]Failed to map user stack page!\r\n");
-        // Potentially free PGD and other allocated tables/pages here
-        return;
-    }
+    //     // Map this single page
+    //     // Stack grows downwards, so USER_STACK_BOTTOM_VA is the start of the VA range.
+    //     // We map pa_pages[0] to USER_STACK_BOTTOM_VA, pa_pages[1] to USER_STACK_BOTTOM_VA + PAGE_SIZE, etc.
+    // if (mappages(user_pgd_pa, USER_STACK_BOTTOM_VA, USER_STACK_SIZE, user_stack_pa, USER_DATA_STACK_ATTR) != 0) {
+    //     uart_send_string("Error: [run_user_vm]Failed to map user stack page!\r\n");
+    //     // Potentially free PGD and other allocated tables/pages here
+    //     return;
+    // }
     uart_send_string("[run_user_vm]User stack mapped: VA 0x"); uart_send_hex(USER_STACK_BOTTOM_VA);
     uart_send_string(" - 0x"); uart_send_hex(USER_STACK_TOP_VA -1); uart_send_string("\r\n");
 
@@ -223,6 +227,8 @@ void run_user_vm(char *archive_kva_addr) {
     // The stack pointer SP_EL0 should point to the top of the allocated stack region.
     if (first_thread){
         thread_init_user((void*)user_base_pa,(void*)user_stack_kva);
+    }
+    if (first_thread){
         first_thread=0;
         switch_to_el0_vm(user_pgd_pa, (void*)USER_CODE_VA, (void*)USER_STACK_TOP_VA);
     }else{
@@ -339,4 +345,174 @@ uint64_t find_available_vma_start(thread_t *process, size_t length_aligned) {
 
     uart_send_string("[find_available_vma_start] No suitable VMA region found.\r\n");
     return 0; // 沒有找到合適的空間 (返回 0 表示失敗)
+}
+//for demand paging
+void handle_page_fault(trap_frame_t *frame) {
+    uint64_t far_el1; // Fault Address Register (EL1) - 儲存導致錯誤的虛擬位址
+    uint64_t esr_el1; // Exception Syndrome Register (EL1) - 儲存錯誤的詳細資訊
+
+    // 從系統暫存器讀取錯誤資訊
+    asm volatile("mrs %0, far_el1" : "=r"(far_el1));
+    asm volatile("mrs %0, esr_el1" : "=r"(esr_el1));
+
+    thread_t *current_process = get_current(); // 獲取目前行程的指標
+    if (!current_process) {
+        uart_send_string("PANIC: Page Fault but no current process!\r\n");
+        // 嚴重錯誤，通常會導致系統停機
+        while(1);
+    }
+
+    uint64_t fault_va = far_el1; // 導致錯誤的虛擬位址
+    uint32_t ec = (esr_el1 >> 26) & 0x3F; // 提取 Exception Class
+
+    // 檢查故障虛擬位址是否屬於目前行程的某個 VMA
+    uart_send_string("[handle_page_fault]Test handle_page_handler1\r\n");
+    uart_send_string(" at VA 0x"); uart_send_hex(fault_va);uart_send_string("\r\n");
+    struct vm_area_struct *vma = find_vma(current_process, fault_va);
+    uart_send_string("[handle_page_fault]Test handle_page_handler2\r\n");
+    if (!vma) {
+        // --- 情況 A: Segmentation Fault ---
+        // 故障位址不屬於任何已定義的 VMA，這是一個非法的記憶體存取
+        uart_send_string("[Segmentation fault]: Kill Process PID ");
+        uart_send_int(current_process->id); // 假設 uart_send_int 存在
+        uart_send_string(" at VA 0x"); uart_send_hex(fault_va);
+        uart_send_string("\r\nESR_EL1: 0x"); uart_send_hex(esr_el1); uart_send_string("\r\n");
+        
+        user_thread_exit(frame,get_current());
+        // 在真實系統中，這裡會呼叫 schedule()，並且這個行程不會再被執行
+        // 這裡我們模擬，讓它在 eret 後可能再次 trap 或進入一個安全迴圈
+        // 或者，如果你的 syscall 有 exit，可以呼叫類似 sys_exit 的邏輯
+        // frame->elr_el1 = SOME_SAFE_EXIT_POINT_IN_USER_SPACE; // 不太好
+        // 最簡單的是讓這個行程不再被排程
+        return;
+    }
+
+    // --- 情況 B: Demand Paging / Translation Fault ---
+    // 故障位址屬於一個合法的 VMA，但對應的實體頁面尚未映射
+    // (我們假設這是一個匿名頁面，因為實驗只要求這個)
+
+    // 打印 Translation fault 日誌
+    uart_send_string("[Translation fault]: 0x"); uart_send_hex(fault_va);
+    uart_send_string(" in VMA [0x"); uart_send_hex(vma->vm_start);
+    uart_send_string("-0x"); uart_send_hex(vma->vm_end);
+    uart_send_string("] for PID "); uart_send_int(current_process->id);
+    uart_send_string("\r\n");
+
+    // 1. 計算故障虛擬位址所在的頁面的起始位址 (頁對齊)
+    uint64_t fault_page_va = fault_va & ~(PAGE_SIZE - 1);
+    uint64_t map_page_pa;
+    // // 2. 分配一個新的實體頁框
+    // //    dynamic_malloc 返回核心虛擬位址 (KVA)
+    // uint64_t new_page_kva = (uint64_t)dynamic_malloc(PAGE_SIZE);
+    // if (!new_page_kva) {
+    //     uart_send_string("PANIC: [Page Fault] Failed to allocate physical page for VA 0x");
+    //     uart_send_hex(fault_page_va); uart_send_string(". Killing process.\r\n");
+    //     // 處理記憶體不足的嚴重錯誤，終止行程
+    //     current_process->state = THREAD_DEAD;
+    //     // schedule();
+    //     while(1);
+    //     return;
+    // }
+
+    // // 3. 初始化頁框內容 (對於匿名頁面，清零)
+    // //    核心透過 KVA 操作這個新分配的頁框
+    // memset((void*)new_page_kva, 0, PAGE_SIZE);
+
+    // // 4. 將 KVA 轉換為 PA，用於填寫 PTE
+    // uint64_t new_page_pa = KVA_TO_PHYS(new_page_kva);
+
+    // uart_send_string("  Allocated new page: PA 0x"); uart_send_hex(new_page_pa);
+    // uart_send_string(" (KVA 0x"); uart_send_hex(new_page_kva);
+    // uart_send_string(") for VA 0x"); uart_send_hex(fault_page_va); uart_send_string("\r\n");
+
+    // 5. 獲取該 VMA 的 PTE 屬性
+    uint64_t pte_attributes = get_pte_attributes_from_prot(vma->vm_prot, vma->vm_flags);
+    uart_send_string("[handle_page_fault] pte_attributes=");
+    uart_send_hex(pte_attributes);
+    uart_send_string("\r\n");
+    uint64_t offset_page;
+    switch (vma->vm_area_tag) {
+        case VMA_AREA_CODE:
+            uart_send_string("[handle_page_fault]Fault in CODE VMA. Loading from backing store PA: 0x");
+            uart_send_hex(current_process->user_code_start_pa); uart_send_string("\r\n");
+            offset_page=fault_page_va-vma->vm_start;
+            map_page_pa=current_process->user_code_start_pa+offset_page;
+            break;
+        case VMA_AREA_STACK:
+            uart_send_string("[handle_page_fault]Fault in STACK VMA. Loading from backing store PA: 0x");
+            uart_send_hex(current_process->user_code_start_pa); uart_send_string("\r\n");
+            offset_page=fault_page_va-vma->vm_start;
+            map_page_pa=KVA_TO_PHYS(current_process->thread_stack_alloc_kva)+offset_page;
+            break;
+        case VMA_AREA_FRAMEBUFFER:
+            uart_send_string("[handle_page_fault]Fault in Framebuffer VMA. Loading from backing store PA: 0x");
+            uart_send_hex(current_process->user_code_start_pa); uart_send_string("\r\n");
+            offset_page=fault_page_va-vma->vm_start;
+            map_page_pa=offset_page+vma->vm_start;
+            break;
+        case VMA_AREA_NONE:
+            uart_send_string("[handle_page_fault]Fault in anonymous pages PA: 0x");
+            uart_send_hex(vma->vm_start); uart_send_string("\r\n");
+            //  2. 分配一個新的實體頁框
+            uint64_t new_page_kva = (uint64_t)dynamic_malloc(PAGE_SIZE);
+            if (!new_page_kva) {
+                uart_send_string("PANIC: [Page Fault] Failed to allocate physical page for VA 0x");
+                uart_send_hex(fault_page_va); uart_send_string(". Killing process.\r\n");
+                // 處理記憶體不足的嚴重錯誤，終止行程
+                current_process->state = THREAD_DEAD;
+                // schedule();
+                user_thread_exit(frame,get_current());
+                return;
+            }
+            // 3. 初始化Frame內容
+            memset((void*)new_page_kva, 0, PAGE_SIZE);
+            // 4. 將 KVA 轉換為 PA，用於填寫 PTE
+            uint64_t new_page_pa = KVA_TO_PHYS(new_page_kva);
+            map_page_pa=new_page_pa;
+            break;
+        default:
+            uart_send_string("[handle_page_fault] Unknown VMA_AREA\r\n");
+            break;
+    }
+
+    // 6. 建立/更新分頁表映射 (只映射這一個出錯的頁面)
+    //    current_process->user_pgd_pa 應該儲存該行程 PGD 的實體位址
+    if (mappages(get_current_ttbr0_el1(), fault_page_va, PAGE_SIZE, map_page_pa, pte_attributes) != 0) {
+        uart_send_string("PANIC: [Page Fault] mappages failed for VA 0x");
+        uart_send_hex(fault_page_va); uart_send_string(". Killing process.\r\n");
+        // dynamic_free((void*)new_page_kva); // 釋放剛分配的頁框
+        current_process->state = THREAD_DEAD;
+        // schedule();
+        while(1);
+        return;
+    }
+
+    uart_send_string("  Page mapped successfully. Resuming user process at ELR 0x");
+    uart_send_hex(frame->elr_el1); // ELR_EL1 應該是 fault_va 所在的指令
+    uart_send_string("\r\n");
+
+    // 不需要修改 frame->elr_el1。
+    // 從異常處理常式 `eret` 返回後，CPU 會自動重新執行導致錯誤的那條指令。
+    switch_user_address_space(get_current_ttbr0_el1());
+    // `switch_user_address_space` 中的 `tlbi vmalle1is` 在行程切換時會清空 TLB，
+    // 但在同一個行程內發生 page fault 並修復後，可能需要更精確的 TLB 操作，
+    // 或者依賴 CPU 自動處理。為了簡化，我們先假設 CPU 重試時會看到新的映射。
+}
+
+struct vm_area_struct* find_vma(thread_t *process, uint64_t addr) {
+    if (!process) return NULL;
+    uart_send_string("[handle_page_fault]Test handle_page_handler3\r\n");
+    struct vm_area_struct *vma = process->vma_list;
+    uart_send_string("[handle_page_fault]Test handle_page_handler4\r\n");
+    while (vma) {
+        uart_send_string("[handle_page_fault]VMA=");
+        uart_send_hex(vma->vm_next);
+        uart_send_string("\r\n");
+        if (addr >= vma->vm_start && addr < vma->vm_end) {
+            return vma;
+        }
+        vma = vma->vm_next;
+    }
+    uart_send_string("[handle_page_fault]Test handle_page_handler5\r\n");
+    return NULL; // 未找到
 }

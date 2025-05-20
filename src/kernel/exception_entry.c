@@ -62,17 +62,19 @@ void sync_lower_el_64_entry(uint64_t parent_sp)
         // uart_send_string(",result: ");
         // uart_send_int(frame->x0);
         // uart_send_string("\r\n");
-    }else if(ec == 0b100100){ //Data Abort
-        uart_send_string("Error: [sync_lower_el_64_entry] Data Abort from a lower Exception level\r\n");
+    }else if(ec == 0b100100 || ec==0b100000){ //Data Abort
+        uart_send_string("Error: [sync_lower_el_64_entry] Data or Instruction Abort from a lower Exception level\r\n");
         uint64_t dfcs = esr & 0x3c; //bit[5~2]
         if (dfcs ==0b000100 ){
-            unsigned int err_level = esr & 0x3; //bit[1~0]
-            uart_send_string("Error: [sync_lower_el_64_entry] Translation fault happened at level ");
-            uart_send_int(err_level);
-            uart_send_string("\r\n");
-            uart_send_string("Error: [sync_lower_el_64_entry] Fault Address Register (FAR_EL1): 0x");
-            uart_send_hex(far);
-            uart_send_string("\r\n------------\r\n");
+            trap_frame_t* frame=(trap_frame_t*)parent_sp;
+            handle_page_fault(frame);
+            // unsigned int err_level = esr & 0x3; //bit[1~0]
+            // uart_send_string("Error: [sync_lower_el_64_entry] Translation fault happened at level ");
+            // uart_send_int(err_level);
+            // uart_send_string("\r\n");
+            // uart_send_string("Error: [sync_lower_el_64_entry] Fault Address Register (FAR_EL1): 0x");
+            // uart_send_hex(far);
+            // uart_send_string("\r\n------------\r\n");
         }else if (dfcs ==0b001100){
             unsigned int err_level = esr & 0x3; //bit[1~0]
             uart_send_string("Error: [sync_lower_el_64_entry] Permission fault happened at level ");

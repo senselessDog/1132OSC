@@ -109,7 +109,7 @@
 .endm
 
 default_exception_handler:
-    bl default_handler_entry
+    //bl default_handler_entry
     eret
 handler_load:
     svc_load_all                    // 恢復上下文

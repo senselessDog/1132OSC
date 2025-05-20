@@ -96,6 +96,11 @@
 #define KVA_TO_PHYS(kva) ((uint64_t)((uint64_t)(kva) - kernel_virtual_offset))
 #endif
 // --- mmap 相關定義 ---
+//area_tag
+#define VMA_AREA_NONE    0
+#define VMA_AREA_CODE    1
+#define VMA_AREA_STACK   2
+#define VMA_AREA_FRAMEBUFFER 3
 // Protection flags (來自 sys/mman.h 的常見值)
 #define PROT_NONE       0x00    // Page can not be accessed
 #define PROT_READ       0x01    // Page can be read
@@ -133,6 +138,7 @@ void run_user_vm(char *archive_va);
 void switch_user_address_space(uint64_t next_pgd_phys_addr);
 //mmap
 struct vm_area_struct {
+    int vm_area_tag;
     uint64_t vm_start;          // 區域的起始虛擬位址 (頁對齊)
     uint64_t vm_end;            // 區域的結束虛擬位址 (vm_start + size, 頁對齊)
     uint64_t vm_size;           // 區域大小 (vm_end - vm_start)
@@ -141,7 +147,6 @@ struct vm_area_struct {
     // struct file *vm_file;    // 對應的檔案 (匿名映射時為 NULL)
     // unsigned long vm_pgoff;  // 在檔案中的位移 (頁為單位)
     struct vm_area_struct *vm_next; // 指向行程的下一個 VMA
-    struct vm_area_struct *vm_prev; // 指向行程的上一個 VMA (如果用雙向鏈結串列)
 };
 struct thread;
 typedef struct thread thread_t;
@@ -155,6 +160,9 @@ uint64_t get_pte_attributes_from_prot(int prot, int flags);
 
 // 輔助函數：在行程的 VMA 列表中尋找一個可用的虛擬位址區域
 uint64_t find_available_vma_start(thread_t *process, size_t length);
+//for demand paging
+void handle_page_fault(trap_frame_t *frame);
+struct vm_area_struct* find_vma(thread_t *process, uint64_t addr) ;
 #endif /* __ASSEMBLER__ */
 
 #endif /* MMU_H_GUARD */
