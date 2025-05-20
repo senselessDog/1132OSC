@@ -366,10 +366,10 @@ void handle_page_fault(trap_frame_t *frame) {
     uint32_t ec = (esr_el1 >> 26) & 0x3F; // 提取 Exception Class
 
     // 檢查故障虛擬位址是否屬於目前行程的某個 VMA
-    uart_send_string("[handle_page_fault]Test handle_page_handler1\r\n");
-    uart_send_string(" at VA 0x"); uart_send_hex(fault_va);uart_send_string("\r\n");
+    // uart_send_string("[handle_page_fault]Test handle_page_handler1\r\n");
+    // uart_send_string(" at VA 0x"); uart_send_hex(fault_va);uart_send_string("\r\n");
     struct vm_area_struct *vma = find_vma(current_process, fault_va);
-    uart_send_string("[handle_page_fault]Test handle_page_handler2\r\n");
+    // uart_send_string("[handle_page_fault]Test handle_page_handler2\r\n");
     if (!vma) {
         // --- 情況 A: Segmentation Fault ---
         // 故障位址不屬於任何已定義的 VMA，這是一個非法的記憶體存取
@@ -378,7 +378,7 @@ void handle_page_fault(trap_frame_t *frame) {
         uart_send_string(" at VA 0x"); uart_send_hex(fault_va);
         uart_send_string("\r\nESR_EL1: 0x"); uart_send_hex(esr_el1); uart_send_string("\r\n");
         
-        user_thread_exit(frame,get_current());
+        user_thread_exit(frame,NULL);
         // 在真實系統中，這裡會呼叫 schedule()，並且這個行程不會再被執行
         // 這裡我們模擬，讓它在 eret 後可能再次 trap 或進入一個安全迴圈
         // 或者，如果你的 syscall 有 exit，可以呼叫類似 sys_exit 的邏輯
@@ -505,8 +505,13 @@ struct vm_area_struct* find_vma(thread_t *process, uint64_t addr) {
     struct vm_area_struct *vma = process->vma_list;
     uart_send_string("[handle_page_fault]Test handle_page_handler4\r\n");
     while (vma) {
-        uart_send_string("[handle_page_fault]VMA=");
-        uart_send_hex(vma->vm_next);
+        uart_send_string("[handle_page_fault] vma address");
+        uart_send_hex((uint64_t)vma);
+        uart_send_string("\r\n");
+        uart_send_string("[handle_page_fault] from=");
+        uart_send_hex(vma->vm_start);
+        uart_send_string(" to=");
+        uart_send_hex(vma->vm_end);
         uart_send_string("\r\n");
         if (addr >= vma->vm_start && addr < vma->vm_end) {
             return vma;

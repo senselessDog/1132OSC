@@ -99,6 +99,7 @@ void thread_init_user(void* user_code_start_pa,void* thread_stack_alloc_kva) {
     first_thread->next = NULL;
     first_thread->user_code_start_pa=user_code_start_pa;
     first_thread->thread_stack_alloc_kva=thread_stack_alloc_kva;
+    first_thread->vma_list=NULL;
     // 保存當前 kernel 的堆疊指針
     // extern void * user_stack;
     // first_thread->thread_context.sp = user_stack;
@@ -130,6 +131,7 @@ thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     new_thread->state = THREAD_READY;
     new_thread->entry_point = entry_point;
     new_thread->next = NULL;
+    new_thread->vma_list=NULL;
     setupInit_vma(new_thread);
     // if (entry_point==NULL) { //fork
     //     // fp will be overwritten in switch_to
@@ -631,8 +633,12 @@ thread_t * find_thread_by_pid(int pid){
 }
 void setupInit_vma(thread_t* thread){
         //for new_vma overlap
-    //user code
+    //user 
+    // uart_send_string("[SetupInit] vma address");
+    // uart_send_hex((uint64_t)thread->vma_list);
+    // uart_send_string("\r\n");
     struct vm_area_struct *code_vma = (struct vm_area_struct *)dynamic_malloc(sizeof(struct vm_area_struct));
+    // uart_send_string("[SetupInit] Allocated new VMA struct at: 0x"); uart_send_hex((uint64_t)code_vma); uart_send_string("\r\n");
     code_vma->vm_area_tag = VMA_AREA_CODE;
     code_vma->vm_start = USER_CODE_VA;
     code_vma->vm_end = USER_CODE_VA+user_space_size;
@@ -642,6 +648,8 @@ void setupInit_vma(thread_t* thread){
     if (thread->vma_list) {
         uart_send_string("[setupInit_vma] first vma\r\n");
         code_vma->vm_next = thread->vma_list;
+    }else{
+        code_vma->vm_next=NULL; //避免亂碼
     }
     thread->vma_list = code_vma;
     //user stack

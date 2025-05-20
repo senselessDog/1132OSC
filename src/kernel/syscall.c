@@ -582,6 +582,7 @@ void* sys_mmap(void* addr_hint, size_t len, int prot, int flags, int fd, int fil
         uart_send_string("[sys_mmap] Error: Failed to allocate VMA struct.\r\n");
         return MAP_FAILED;
     }
+    uart_send_string("[sys_mmap] Allocated new VMA struct at: 0x"); uart_send_hex((uint64_t)new_vma); uart_send_string("\r\n");
     new_vma->vm_area_tag = VMA_AREA_NONE;
     new_vma->vm_start = va_start;
     new_vma->vm_end = va_start + len_aligned;
@@ -635,7 +636,6 @@ void* sys_mmap(void* addr_hint, size_t len, int prot, int flags, int fd, int fil
                          pte_attrs) != 0) {
                 uart_send_string("[sys_mmap] Error: mappages failed for VA 0x");
                 uart_send_hex(current_mapping_va); uart_send_string(" during MAP_POPULATE.\r\n");
-                // TODO: 回滾
                 dynamic_free((void*)page_frame_alloc_kva); // 釋放剛分配的頁框 KVA
                 dynamic_free(new_vma);                 // 釋放 VMA 結構
                 return MAP_FAILED;
