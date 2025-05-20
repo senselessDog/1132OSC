@@ -427,9 +427,9 @@ void handle_page_fault(trap_frame_t *frame) {
 
     // 5. 獲取該 VMA 的 PTE 屬性
     uint64_t pte_attributes = get_pte_attributes_from_prot(vma->vm_prot, vma->vm_flags);
-    uart_send_string("[handle_page_fault] pte_attributes=");
-    uart_send_hex(pte_attributes);
-    uart_send_string("\r\n");
+    // uart_send_string("[handle_page_fault] pte_attributes=");
+    // uart_send_hex(pte_attributes);
+    // uart_send_string("\r\n");
     uint64_t offset_page;
     switch (vma->vm_area_tag) {
         case VMA_AREA_CODE:
@@ -501,23 +501,23 @@ void handle_page_fault(trap_frame_t *frame) {
 
 struct vm_area_struct* find_vma(thread_t *process, uint64_t addr) {
     if (!process) return NULL;
-    uart_send_string("[handle_page_fault]Test handle_page_handler3\r\n");
+    // uart_send_string("[handle_page_fault]Test handle_page_handler3\r\n");
     struct vm_area_struct *vma = process->vma_list;
-    uart_send_string("[handle_page_fault]Test handle_page_handler4\r\n");
+    // uart_send_string("[handle_page_fault]Test handle_page_handler4\r\n");
     while (vma) {
-        uart_send_string("[handle_page_fault] vma address");
-        uart_send_hex((uint64_t)vma);
-        uart_send_string("\r\n");
-        uart_send_string("[handle_page_fault] from=");
-        uart_send_hex(vma->vm_start);
-        uart_send_string(" to=");
-        uart_send_hex(vma->vm_end);
-        uart_send_string("\r\n");
+        // uart_send_string("[handle_page_fault] vma address");
+        // uart_send_hex((uint64_t)vma);
+        // uart_send_string("\r\n");
+        // uart_send_string("[handle_page_fault] from=");
+        // uart_send_hex(vma->vm_start);
+        // uart_send_string(" to=");
+        // uart_send_hex(vma->vm_end);
+        // uart_send_string("\r\n");
         if (addr >= vma->vm_start && addr < vma->vm_end) {
             return vma;
         }
         vma = vma->vm_next;
     }
-    uart_send_string("[handle_page_fault]Test handle_page_handler5\r\n");
+    // uart_send_string("[handle_page_fault]Test handle_page_handler5\r\n");
     return NULL; // 未找到
 }
