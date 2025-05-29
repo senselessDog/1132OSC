@@ -273,3 +273,41 @@ void* memset(void *s, int c, size_t n) {
 
     return s; // 返回原始指標
 }
+
+char *strrchr(const char *str, int c) {
+    const char *last_occurrence = NULL;
+    char char_to_find = (char)c; // Convert int to char
+
+    // Iterate through the string until the null terminator is reached
+    while (*str != '\0') {
+        if (*str == char_to_find) {
+            last_occurrence = str; // Update last_occurrence if character is found
+        }
+        str++; // Move to the next character
+    }
+
+    // Check if the character is the null terminator itself
+    if (char_to_find == '\0') {
+        last_occurrence = str; // 'str' now points to the null terminator
+    }
+
+    // Cast away constness before returning, as per standard library function signature
+    return (char *)last_occurrence;
+}
+
+char *strchr(const char *str, int c) {
+    char char_to_find = (char)c; // Convert int to char
+
+    // Iterate through the string, including the null terminator
+    while (1) {
+        if (*str == char_to_find) {
+            return (char *)str; // Found it, return pointer
+        }
+        if (*str == '\0') {
+            break; // Reached end of string, character not found
+        }
+        str++; // Move to the next character
+    }
+
+    return NULL; // Character not found
+}

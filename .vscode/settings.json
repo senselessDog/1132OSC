@@ -5,6 +5,12 @@
         "task_queue.h": "c",
         "stdio.h": "c",
         "buddy_alloc.h": "c",
-        "stdlib.h": "c"
-    }
+        "stdlib.h": "c",
+        "typeinfo": "c",
+        "compare": "c",
+        "limits": "c",
+        "new": "c",
+        "uart.h": "c"
+    },
+    "makefile.configureOnOpen": false
 }

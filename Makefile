@@ -19,7 +19,8 @@ BOOTLOADER_ELF_TARGET = bootloader.elf
 
 # Define source files with new paths
 KERNEL_SRCS = $(wildcard src/kernel/*.c) $(wildcard src/kernel/*.S) $(wildcard src/lib/*.c) \
-				$(wildcard boot/kernel/*.S)
+				$(wildcard boot/kernel/*.S)\
+				$(wildcard src/kernel/fs/*.c)
 # boot/boot_kernel.S kernel/kernel.c lib/uart.c lib/strcmp.c kernel/mailbox.c \
 # lab2: kernel/power.c kernel/cpio.c kernel/alloc.c kernel/devicetree.c \
 # lab3: kernel/run_userprogram.c kernel/exception_entry.c boot/exception.S \
@@ -69,32 +70,18 @@ clean:
 	find . -name "*.o" -type f -delete
 
 qemu:
+	qemu-system-aarch64 -machine raspi3b -kernel script/kernel8.img -nographic -serial null -serial pty -initrd initramfs.cpio -dtb bcm2710-rpi-3-b-plus.dtb -S -s
+qemu_video:
 	qemu-system-aarch64 -machine raspi3b -kernel script/kernel8.img -nographic -serial null -serial pty -initrd initramfs.cpio -dtb bcm2710-rpi-3-b-plus.dtb -S -s \
 	-display gtk \
 	-device usb-kbd \
 	-device usb-mouse
-qemu_video:
-	~/lab/qemu/build/qemu-system-aarch64 \
-	-machine raspi3b \
-	-kernel ~/lab/lab6/script/kernel8.img \
-	-initrd ~/lab/lab6/initramfs.cpio \
-	-dtb ~/lab/lab6/bcm2710-rpi-3-b-plus.dtb \
-	-display gtk \
-	-device usb-kbd \
-	-device usb-mouse \
-	-serial null \
-	-serial pty \
-	-S -s
-	# # 使用 GTK 顯示(支援 OpenGL)
-	# # 啟用 USB 鍵盤（方便輸入命令）
-	# # 啟用 USB 滑鼠（可選）
-	# # 將串口輸出重定向到終端（方便調試）
 show_qemu:
 	sudo minicom -D /dev/pts/7 -b 115200
 gdb_init:
 	gdb-multiarch -x .gdbinit
 python:
-	/bin/python3 /home/kuan/lab/lab6/script/upload_kernel.py
+	/bin/python3 /home/kuan/lab/lab7/script/upload_kernel.py
 
 show_raspberryPi:
 	sudo minicom -D /dev/ttyUSB0 -b 115200

@@ -33,6 +33,7 @@ define kernel
   # b syscall.c:35
   # b syscall.c:36
   b sys_fork
+  # b clear_bss
   # b el1_irq_entry
   # b lower_el_irq_entry
   # b thread.c:153

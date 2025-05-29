@@ -5,6 +5,7 @@
 #include "task_queue.h"
 #include "thread.h"
 #include "alloc.h"
+#include "vfs.h"
 void get_board_revision();
 void get_arm_memory();
 // lab2
@@ -264,7 +265,13 @@ void kernel_main(void *dtb_addr)
     
     //interrupt task init
     task_queue_init(&global_task_queue);
-    
+    //init rootfs
+    kernel_init_vfs();
+    if (rootfs && rootfs->root) { // 確保根檔案系統已掛載
+        //test_vfs_operations();
+    } else {
+        uart_send_string("Error: [kernel_main] rootfs not available, skipping VFS tests.\r\n");
+    }
     // Enable interrupts
     uart_enable_interrupt();
     enable_interrupts();
