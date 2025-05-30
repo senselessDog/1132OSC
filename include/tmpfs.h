@@ -8,8 +8,8 @@
 #define TMPFS_MAX_DIR_ENTRIES 16 // [cite: 20]
 #define TMPFS_MAX_FILE_SIZE 4096 // [cite: 21]
 enum TMPFS_TYPE {
-    TMPFS_FILE, // 或者你之前用的 TMPFS_FILE
-    TMPFS_DIR   // 或者你之前用的 TMPFS_DIR
+    TMPFS_DIR,  // 或者你之前用的 TMPFS_DIR
+    TMPFS_FILE,      // 或者你之前用的 TMPFS_FILE
 };
 // tmpfs 內部節點結構 (會被 vnode->internal 指向)
 typedef struct tmpfs_inode {

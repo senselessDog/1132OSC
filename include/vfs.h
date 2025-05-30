@@ -66,8 +66,8 @@ struct vnode_operations {
     int (*mkdir)(struct vnode* dir_node, struct vnode** target, const char* component_name); //
 };
 enum VNODE_TYPE {
-    VNODE_FILE, // 或者你之前用的 VNODE_FILE
-    VNODE_DIR   // 或者你之前用的 VNODE_DIR
+    VNODE_DIR,  // 或者你之前用的 VNODE_DIR
+    VNODE_FILE // 或者你之前用的 VNODE_FILE
 };
 // VFS 中的節點 (vnode)
 struct vnode {
@@ -90,8 +90,9 @@ struct file {
 
 // 掛載點 (mount point) 資訊
 struct mount {
-    struct vnode* root;       // 這個掛載的檔案系統的根 vnode
-    struct filesystem* fs;    // 指向這個掛載點所屬的檔案系統類型資訊
+    struct vnode* mount_point_vnode; // 指向「掛載點目錄」的 vnode (例如父檔案系統中的 /initramfs)
+    struct vnode* root;              // 指向「被掛載檔案系統」自己的根 vnode (例如新的 tmpfs 實例的 /)
+    struct filesystem* fs;           // 指向檔案系統類型資訊
 };
 
 // 檔案系統類型資訊
@@ -131,8 +132,17 @@ int vfs_lookup(const char* pathname, struct vnode** target); //
 #define E_FBIG   -27 // File too large
 #define E_NOSPC  -28 // No space left on device
 #define E_ROFS   -30 // Read-only file system
+//basic 2
+#define E_BUSY   -16 // Device or resource busy
 
 #define O_CREAT     00000100 // 八進制，用於建立檔案
 #define O_DIRECTORY 00200000 // 八進制，確保開啟的是目錄 (Linux 特有)
+#define O_RDWR  02   // Open for reading and writing
+
+#define MAX_REGISTERED_FS 8
+#define MAX_MOUNTED_FS 8 // 假設最多可以掛載8個檔案系統
+
+extern struct mount* mounted_fs_list[MAX_MOUNTED_FS];
+extern int num_mounted_fs;
 
 #endif // VFS_H

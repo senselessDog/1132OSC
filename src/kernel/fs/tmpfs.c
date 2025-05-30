@@ -63,7 +63,7 @@ int tmpfs_write(struct file* file, const void* buf, size_t len) {
 	if (file->f_pos > node->size) {
 		node->size = file->f_pos; // 更新檔案大小
 	}
-	uart_send_string("tmpfs_write: wrote ");
+	uart_send_string("[tmpfs_write] wrote ");
 	uart_send_int(len);
 	uart_send_string(" bytes to '");
 	uart_send_string(node->name);
@@ -136,7 +136,7 @@ int tmpfs_lookup(struct vnode* dir_node, struct vnode** target, const char* comp
 		if (strcmp(child_internal->name, component_name) == 0) {
 			*target = parent_internal->children[i];
 			(*target)->ref_count++; // 增加引用計數
-			uart_send_string("tmpfs_lookup: found '");
+			uart_send_string("[tmpfs_lookup] found '");
 			uart_send_string(component_name);
 			uart_send_string("' in '");
 			uart_send_string(parent_internal->name);
@@ -144,7 +144,7 @@ int tmpfs_lookup(struct vnode* dir_node, struct vnode** target, const char* comp
 			return E_OK;
 		}
 	}
-	uart_send_string("tmpfs_lookup: '");
+	uart_send_string("[tmpfs_lookup] '");
 	uart_send_string(component_name);
 	uart_send_string("' not found in '");
 	uart_send_string(parent_internal->name);
@@ -186,7 +186,7 @@ int tmpfs_create_common(struct vnode* dir_node, struct vnode** target, const cha
 	// 3. 將新節點加入父目錄
 	parent_internal->children[parent_internal->num_children++] = new_vnode;
 	*target = new_vnode;
-	uart_send_string("tmpfs_create_common: created '");
+	uart_send_string("[tmpfs_create_common] created '");
 	uart_send_string(component_name);
 	uart_send_string("' in '");
 	uart_send_string(parent_internal->name);
@@ -205,7 +205,7 @@ int tmpfs_create(struct vnode* dir_node, struct vnode** target, const char* comp
 }
 
 int tmpfs_mkdir(struct vnode* dir_node, struct vnode** target, const char* component_name) {
-	uart_send_string("tmpfs_mkdir: attempting to create dir '");
+	uart_send_string("[tmpfs_mkdir] attempting to create dir '");
 	uart_send_string(component_name);
 	uart_send_string("'\r\n");
 	return tmpfs_create_common(dir_node, target, component_name, TMPFS_DIR, VNODE_DIR);
@@ -222,7 +222,7 @@ struct vnode_operations tmpfs_vnode_ops = {
 // 這個函式在掛載 tmpfs 時被 VFS 呼叫
 int tmpfs_setup_mount(struct filesystem* fs_info, struct mount* mount_info) {
 	if (!fs_info || !mount_info) return E_INVAL;
-	uart_send_string("tmpfs_setup_mount: Setting up mount for ");
+	uart_send_string("[tmpfs_setup_mount] Setting up mount for ");
 	uart_send_string(fs_info->name);
 	uart_send_string("\r\n");
 
@@ -244,7 +244,7 @@ int tmpfs_setup_mount(struct filesystem* fs_info, struct mount* mount_info) {
 	mount_info->root = root_vnode; // 掛載點的根 vnode 就是剛建立的 tmpfs 根 vnode
 	mount_info->fs = fs_info; 	// 指向 tmpfs 的 filesystem 結構
 
-	uart_send_string("tmpfs_setup_mount: tmpfs root vnode created successfully.\r\n");
+	uart_send_string("[tmpfs_setup_mount] tmpfs root vnode created successfully.\r\n");
 	return E_OK;
 }
 
@@ -256,11 +256,11 @@ struct filesystem tmpfs_filesystem = {
 
 // 供外部呼叫以註冊 tmpfs 到 VFS
 void tmpfs_init() {
-	uart_send_string("tmpfs_init: Registering tmpfs filesystem.\r\n");
+	uart_send_string("[tmpfs_init] Registering tmpfs filesystem.\r\n");
 	if (register_filesystem(&tmpfs_filesystem) != E_OK) {
-		uart_send_string("tmpfs_init: Failed to register tmpfs!\r\n");
+		uart_send_string("[tmpfs_init] Failed to register tmpfs!\r\n");
 		// 處理註冊失敗的情況，例如 panic
 	} else {
-		uart_send_string("tmpfs_init: tmpfs registered successfully.\r\n");
+		uart_send_string("[tmpfs_init] tmpfs registered successfully.\r\n");
 	}
 }
