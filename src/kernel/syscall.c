@@ -7,6 +7,7 @@
 #include "thread.h"
 #include "mailbox.h"
 #include "task_queue.h"
+#include "tmpfs.h"
 extern uint64_t g_initramfs_addr;
 int should_run_task_queue = 0;
 // System call handler function
@@ -105,6 +106,82 @@ void handle_syscall(uint64_t kernel_sp) {
                 (int)arg5,   // offset (arg5 from x5)
                 frame
             );
+            break;
+            case SYS_OPEN:
+            // const char* pathname = (const char*)arg0;
+            // int flags = (int)arg1;
+            // frame->x0 = sys_open((const char*)arg0, (int)arg1);
+            {
+                // 為了安全，從使用者空間複製 pathname
+                char user_pathname[MAX_PATHNAME_LEN + 1];
+                strncpy(user_pathname, (const char*)arg0, MAX_PATHNAME_LEN);
+                user_pathname[MAX_PATHNAME_LEN] = '\0';
+
+                frame->x0 = sys_open(user_pathname, (int)arg1);
+            }
+            break;
+
+        case SYS_CLOSE:
+            frame->x0 = sys_close((int)arg0); // arg0 是 fd
+            break;
+
+        case SYS_WRITE:
+            // arg0 is fd, arg1 is buf, arg2 is count
+            // 需要從使用者空間複製 buf
+            // frame->x0 = sys_write((int)arg0, (const void*)arg1, (size_t)arg2);
+            {
+                frame->x0 = sys_write((int)arg0, (const void*)arg1, (size_t)arg2);
+            }
+            break;
+
+        case SYS_READ:
+            // arg0 is fd, arg1 is buf, arg2 is count
+            // 需要將結果複製到使用者空間的 buf
+            // frame->x0 = sys_read((int)arg0, (void*)arg1, (size_t)arg2);
+            {
+                frame->x0 = sys_read((int)arg0, (void*)arg1, (size_t)arg2);
+            }
+            break;
+
+        case SYS_MKDIR:
+            // const char* pathname = (const char*)arg0;
+            // int mode = (int)arg1; // mode 可以忽略
+            // frame->x0 = sys_mkdir((const char*)arg0, (int)arg1);
+             {
+                char user_pathname_mkdir[MAX_PATHNAME_LEN + 1];
+                strncpy(user_pathname_mkdir, (const char*)arg0, MAX_PATHNAME_LEN);
+                user_pathname_mkdir[MAX_PATHNAME_LEN] = '\0';
+                frame->x0 = sys_mkdir(user_pathname_mkdir, (int)arg1);
+            }
+            break;
+
+        case SYS_MOUNT:
+            // const char *src = (const char*)arg0; // 忽略
+            // const char *target = (const char*)arg1;
+            // const char *filesystem = (const char*)arg2;
+            // unsigned long flags = (unsigned long)arg3; // 忽略
+            // frame->x0 = sys_mount((const char*)arg0, (const char*)arg1, (const char*)arg2, (unsigned long)arg3);
+            {
+                char user_target[MAX_PATHNAME_LEN + 1];
+                char user_fs[MAX_PATHNAME_LEN + 1]; // 假設 FS 名稱也不會太長
+                strncpy(user_target, (const char*)arg1, MAX_PATHNAME_LEN);
+                user_target[MAX_PATHNAME_LEN] = '\0';
+                strncpy(user_fs, (const char*)arg2, MAX_PATHNAME_LEN);
+                user_fs[MAX_PATHNAME_LEN] = '\0';
+                // src 和 flags 被忽略
+                frame->x0 = sys_mount(NULL, user_target, user_fs, 0);
+            }
+            break;
+
+        case SYS_CHDIR: // 假設 syscall number 17
+            // const char* path = (const char*)arg0;
+            // frame->x0 = sys_chdir((const char*)arg0);
+            {
+                char user_path_chdir[MAX_PATHNAME_LEN + 1];
+                strncpy(user_path_chdir, (const char*)arg0, MAX_PATHNAME_LEN);
+                user_path_chdir[MAX_PATHNAME_LEN] = '\0';
+                frame->x0 = sys_chdir(user_path_chdir);
+            }
             break;
         case SYS_SIGRETURN:
             // 此 system call 通常沒有參數，或者參數是隱含的 (trap frame)
@@ -293,6 +370,39 @@ int sys_fork(trap_frame_t *frame) {
     // 3. 子行程不應該處於 is_handling_signal 狀態
     child->is_handling_signal = 0;
     uart_send_string("[sys_fork] Finished signal copy\r\n");
+
+    // 子程序應該繼承父程序的 CWD 和 root_dir
+    if (parent->cwd) {
+        // 釋放 child 在 thread_create 中預設設定的 cwd (如果有的話)
+        if (child->cwd) child->cwd->ref_count--;
+        child->cwd = parent->cwd;
+        child->cwd->ref_count++; // 父程序的 CWD 被子程序引用，增加計數
+    }
+    if (parent->root_dir) {
+        // 釋放 child 在 thread_create 中預設設定的 root_dir (如果有的話)
+        if (child->root_dir) child->root_dir->ref_count--;
+        child->root_dir = parent->root_dir;
+        child->root_dir->ref_count++; // 父程序的 root_dir 被子程序引用，增加計數
+    }
+
+    // 檔案描述符表：子程序獲得父程序檔案描述符表的副本。
+    // 重要的是，它們指向相同的 struct file，所以 struct file 的引用計數（vnode->ref_count）需要增加。
+    for (int i = 0; i < MAX_PROCESS_OPEN_FILES; ++i) {
+        if (parent->fd_table[i] != NULL) {
+            child->fd_table[i] = parent->fd_table[i];
+            // struct file 本身不直接計數，但它引用的 vnode 需要計數
+            // 這個計數應該在 vfs_open 時已經處理好，這裡共享 fd 意味著共享底層的 open file description
+            // 所以，我們需要增加 vnode 的引用計數，因為現在多了一個程序（子程序）透過這個 fd 間接引用它
+            child->fd_table[i]->vnode->ref_count++;
+            uart_send_string("[sys_fork] Copied fd "); uart_send_int(i);
+            uart_send_string(" to child, vnode '");
+            uart_send_string(child->fd_table[i]->vnode);
+            uart_send_string("' ref_count now "); uart_send_int(child->fd_table[i]->vnode->ref_count);
+            uart_send_string("\r\n");
+        } else {
+            child->fd_table[i] = NULL;
+        }
+    }
     // Then print from child_thread->trap_frame
     uart_send_string("[sys_fork] ---- Child's Target Trap Frame Values ----\r\n");
     uart_send_string("  elr_el1 (return to user VA): 0x"); uart_send_hex(frame->elr_el1); uart_send_string("\r\n");
@@ -647,6 +757,125 @@ void* sys_mmap(void* addr_hint, size_t len, int prot, int flags, int fd, int fil
 
     // 5. 返回新區域的起始虛擬位址
     return (void*)new_vma->vm_start;
+}
+int sys_open(const char* pathname, int flags) {
+    uart_send_string("[syscall] sys_open: path '"); uart_send_string(pathname);
+    uart_send_string("', flags "); uart_send_int(flags); uart_send_string("\r\n");
+
+    thread_t* current_task = get_current();
+    if (!current_task) return E_PERM; // No current task context
+
+    struct file* opened_file = NULL; // vfs_open 會填充這個
+    // 注意：vfs_open 的簽名是 (pathname, flags, struct file** target_file)
+    int vfs_ret = vfs_open(pathname, flags, &opened_file);
+
+    if (vfs_ret != E_OK) { // vfs_open 失敗
+        return vfs_ret; // 返回 vfs 層的錯誤碼 (通常是負數)
+    }
+
+    // vfs_open 成功，opened_file 指向新的 struct file
+    // 現在需要在當前任務的 fd_table 中分配一個 fd
+    int fd = -1;
+    for (int i = 0; i < MAX_PROCESS_OPEN_FILES; ++i) {
+        if (current_task->fd_table[i] = opened_file) {
+            fd = i;
+            break;
+        }
+    }
+
+    if (fd == -1) { // fd 表滿了
+        // 需要關閉剛才 vfs_open 成功的 file，因為沒有 fd 可以分配給它
+        vfs_close(opened_file); // vfs_close 會處理 ref_count 和釋放 file 結構
+        return -E_MAX_FILES; // 或者 ENFILE
+    }
+    uart_send_string("[syscall] sys_open successful, assigned fd: "); uart_send_int(fd); uart_send_string("\r\n");
+    return fd; // 成功，返回檔案描述符
+}
+
+int sys_close(int fd) {
+    uart_send_string("[syscall] sys_close: fd "); uart_send_int(fd); uart_send_string("\r\n");
+    thread_t* current_task = get_current();
+    if (!current_task) return E_PERM;
+
+    if (fd < 0 || fd >= MAX_PROCESS_OPEN_FILES || current_task->fd_table[fd] == NULL) {
+        return E_BADF; // Bad file descriptor
+    }
+
+    struct file* file_to_close = current_task->fd_table[fd];
+    // current_task->fd_table[fd] = NULL; // 從 fd 表中移除
+
+    return vfs_close(file_to_close); // vfs_close 返回 E_OK 或其他錯誤碼
+}
+
+long sys_write(int fd, const void* user_buf, size_t count) {
+    // uart_send_string("[syscall] sys_write: fd "); uart_send_int(fd);
+    // uart_send_string(", count "); uart_send_int(count); uart_send_string("\r\n");
+    thread_t* current_task = get_current();
+    if (!current_task) return E_PERM;
+
+    if (fd < 0 || fd >= MAX_PROCESS_OPEN_FILES || current_task->fd_table[fd] == NULL) {
+        return E_BADF;
+    }
+    return vfs_write(current_task->fd_table[fd], user_buf, count);
+}
+
+long sys_read(int fd, void* user_buf, size_t count) {
+    // uart_send_string("[syscall] sys_read: fd "); uart_send_int(fd);
+    // uart_send_string(", count "); uart_send_int(count); uart_send_string("\r\n");
+    thread_t* current_task = get_current();
+    if (!current_task) return E_PERM;
+
+    if (fd < 0 || fd >= MAX_PROCESS_OPEN_FILES || current_task->fd_table[fd] == NULL) {
+        return E_BADF;
+    }
+    return vfs_read(current_task->fd_table[fd], user_buf, count);
+}
+
+int sys_mkdir(const char* pathname, int mode) {
+    // mode 在此處被忽略
+    uart_send_string("[syscall] sys_mkdir: path '"); uart_send_string(pathname); uart_send_string("'\r\n");
+    // vfs_mkdir 內部會使用當前任務的 CWD/root_dir (如果 vfs_mkdir 內部調用了 vfs_resolve_path)
+    // 或者，sys_mkdir 需要先解析路徑得到父目錄 vnode 和新目錄名，然後調用 v_ops->mkdir
+    // 為了與 vfs_mkdir 的現有簽名一致，我們先假設 vfs_mkdir 會處理 CWD
+    return vfs_mkdir(pathname);
+}
+
+int sys_mount(const char *src, const char *target, const char *filesystem, unsigned long flags) {
+    // src 和 flags 被忽略
+    uart_send_string("[syscall] sys_mount: target '"); uart_send_string(target);
+    uart_send_string("', fs '"); uart_send_string(filesystem); uart_send_string("'\r\n");
+    return vfs_mount(target, filesystem);
+}
+
+int sys_chdir(const char* path) {
+    uart_send_string("[syscall] sys_chdir: path '"); uart_send_string(path); uart_send_string("'\r\n");
+    thread_t* current_task = get_current();
+    if (!current_task) return E_PERM;
+
+    struct vnode* target_dir_vnode = NULL;
+    int ret = vfs_resolve_path(path, current_task->cwd, current_task->root_dir, &target_dir_vnode);
+
+    if (ret != E_OK) {
+        return ret;
+    }
+
+    if (target_dir_vnode->type != VNODE_DIR) {
+        target_dir_vnode->ref_count--; // resolve_path 增加的引用
+        return -E_NOTDIR;
+    }
+
+    // 成功找到目標目錄
+    if (current_task->cwd) {
+        current_task->cwd->ref_count--; // 釋放舊 CWD 的引用
+    }
+    current_task->cwd = target_dir_vnode; // 更新 CWD，target_dir_vnode 的引用由 resolve_path 保證
+
+    uart_send_string("[syscall] sys_chdir successful. New CWD: '");
+    if (current_task->cwd && current_task->cwd->internal) {
+        uart_send_string(((tmpfs_inode_t*)current_task->cwd->internal)->name);
+    }
+    uart_send_string("'\r\n");
+    return E_OK;
 }
 void sys_sigreturn(trap_frame_t *current_handler_frame) {
     thread_t *current = get_current();

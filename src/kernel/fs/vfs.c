@@ -3,8 +3,9 @@
 #include "tmpfs.h" // 包含 tmpfs 的定義和函式
 #include "uart.h" // 包含 UART 函式 (例如 uart_send_string)
 #include "buddy_alloc.h" // 包含動態記憶體分配函式 (例如 dynamic_malloc, dynamic_free)
+#include "strcmp.h"
+#include "thread.h" 
 #include <stdio.h> 	// For printf, remove for kernel
-#include <string.h> // For strcmp, strcpy, strchr
 
 // 假設一個簡單的已註冊檔案系統列表 (實際應用中可能需要更動態的結構)
 static struct filesystem* registered_fs_list[MAX_REGISTERED_FS];
@@ -14,15 +15,10 @@ struct mount* mounted_fs_list[MAX_MOUNTED_FS];
 int num_mounted_fs = 0;
 // 全域的根檔案系統掛載點 (在某處定義並初始化)
 struct mount* rootfs = NULL;
+int first_mount_fs=1;
 
-// 每個行程的檔案描述符表 (File Descriptor Table) 和目前工作目錄 (CWD)
-// 這是 Basic Exercise 3 的內容，這裡先簡單示意，Basic 1 的重點是 rootfs
-#define MAX_OPEN_FILES_PER_PROCESS 16 // (對應 fd < 16)
-#define MAX_PATHNAME_LEN 255 //
-
-// 簡化版：全域只有一個檔案描述符表 (真正的系統中每個 process 有自己的)
-static struct file* global_fd_table[MAX_OPEN_FILES_PER_PROCESS];
-static int next_fd = 0; // 非常簡化的 fd 分配
+// static struct file* global_fd_table[MAX_OPEN_FILES_PER_PROCESS];
+// static int next_fd = 0; // 非常簡化的 fd 分配
 //init vfs
 void kernel_init_vfs() {
 	uart_send_string("[kernel_init_vfs] Initializing VFS...\r\n");
@@ -51,7 +47,7 @@ void kernel_init_vfs() {
 
 	// 4. 呼叫 tmpfs 的 setup_mount 來初始化 tmpfs 並設定 rootfs 的內容
 	// 	實驗手冊提到: "lookup might not be available, you can call setup_mount directly to mount it."
-	int ret = fs_type_to_mount->setup_mount(fs_type_to_mount, rootfs);
+	int ret = fs_type_to_mount->setup_mount(fs_type_to_mount, rootfs,NULL);
 	if (ret != E_OK) {
 		uart_send_string("CRITICAL:[kernel_init_vfs] Failed to setup_mount for rootfs!\r\n");
 		dynamic_free(rootfs); // 清理
@@ -97,129 +93,141 @@ struct filesystem* find_filesystem(const char* name) {
 
 
 // --- 核心 VFS Pathname Lookup ---
-// vfs_lookup: 解析完整路徑名稱，找到目標 vnode
-// pathname: 絕對路徑，例如 "/foo/bar" 或 "/"
-// target: (輸出參數) 指向找到的 vnode
-//
-// 簡化版 lookup:
-// - 只支援絕對路徑
-// - 遇到掛載點會切換 (Basic Exercise 2 的內容，但對根目錄查找有用)
-// - component_name 長度等限制由底層 fs (如 tmpfs) 處理
-int vfs_lookup(const char* pathname, struct vnode** target) {
-	if (!pathname || !target) return E_INVAL;
-	if (!rootfs || !rootfs->root) {
-		uart_send_string("Error: [vfs_lookup] Rootfs not mounted!\r\n");
-		return E_NOENT; //或者 E_AGAIN / E_BUSY
-	}
+// 新增一個內部路徑解析輔助函數
+// base_node: 相對路徑的起點 (通常是 cwd)
+// root_node: 絕對路徑的起點 (任務的 root_dir)
+int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode* root_node, struct vnode** target) {
+    if (!pathname || !target || !root_node) return E_INVAL;
+    if (!base_node && pathname[0] != '/') return E_INVAL; // 相對路徑但沒有 base_node
 
-	uart_send_string("[vfs_lookup] Looking for path '");
-	uart_send_string(pathname);
-	uart_send_string("'\r\n");
+    uart_send_string("[vfs_resolve_path] Path: '"); uart_send_string(pathname);
+    uart_send_string("', Base: '");
+    if (base_node && base_node->internal) uart_send_string(((tmpfs_inode_t*)base_node->internal)->name); else uart_send_string("N/A");
+    uart_send_string("', Root: '");
+    if (root_node && root_node->internal) uart_send_string(((tmpfs_inode_t*)root_node->internal)->name); else uart_send_string("N/A");
+    uart_send_string("'\r\n");
 
-	if (strcmp(pathname, "/") == 0) {
-		*target = rootfs->root;
-		(*target)->ref_count++;
-		return E_OK;
-	}
 
-	struct vnode* current_vnode = rootfs->root;
-	current_vnode->ref_count++; // Start with a reference to root
+    struct vnode* current_vnode;
+    char path_copy[MAX_PATHNAME_LEN + 1];
+    strcpy(path_copy, pathname);
+    path_copy[MAX_PATHNAME_LEN] = '\0';
 
-	char path_copy[MAX_PATHNAME_LEN + 1];
-	strcpy(path_copy, pathname);
-	path_copy[MAX_PATHNAME_LEN] = '\0';
+    char* p = path_copy;
 
-	char* next_component = path_copy;
-	if (*next_component == '/') { // 跳過開頭的 '/'
-		next_component++;
-	}
+    if (p[0] == '/') {
+        current_vnode = root_node; // 絕對路徑從任務的根目錄開始
+        p++;
+        if (*p == '\0') { // 路徑是 "/"
+            *target = root_node;
+            (*target)->ref_count++;
+            return E_OK;
+        }
+    } else {
+        current_vnode = base_node; // 相對路徑從 CWD 開始
+    }
+    current_vnode->ref_count++; // 持有起始節點的引用
 
-	char* end_of_path = next_component + strlen(next_component);
+    char* next_component;
+    while (*p != '\0') {
+        // 跳過多餘的 '/'
+        while (*p == '/') p++;
+        if (*p == '\0') break;
 
-	while (next_component < end_of_path && *next_component != '\0') {
-		char* current_component_name = next_component;
-		char* separator = strchr(next_component, '/');
-		
-		if (separator) {
-			*separator = '\0'; // 暫時切斷字串以取得當前 component name
-			next_component = separator + 1;
-		} else {
-			next_component = end_of_path; // 最後一個 component
-		}
+        next_component = p;
+        char* separator = strchr(p, '/');
+        if (separator) {
+            *separator = '\0';
+            p = separator + 1;
+        } else {
+            p += strlen(p); // 移動到字串末尾
+        }
 
-		if (strlen(current_component_name) == 0) { // 處理像 "//" 這樣的情況
-			if (separator) continue; // 如果是路徑中間的 // 就跳過
-			else break; // 如果是路徑結尾的 /，則查找結束
-		}
+        if (strlen(next_component) == 0) continue; // 應該在上面 while(*p=='/') 處理掉了
 
-		uart_send_string("[vfs_lookup] current_vnode is '");
-		uart_send_string(((tmpfs_inode_t*)current_vnode->internal)->name);
-		uart_send_string("', looking for component '");
-		uart_send_string(current_component_name);
-		uart_send_string("'\r\n"); // 假設是 tmpfs，僅為 debug
+        uart_send_string("[vfs_resolve_path] Current vnode: '");
+        if (current_vnode->internal) uart_send_string(((tmpfs_inode_t*)current_vnode->internal)->name);
+        uart_send_string("', looking for: '"); uart_send_string(next_component); uart_send_string("'\r\n");
 
-		if (!current_vnode->v_ops || !current_vnode->v_ops->lookup) {
-			current_vnode->ref_count--;
-			return E_INVAL; // No lookup operation
-		}
+        struct vnode* found_vnode = NULL;
 
-		struct vnode* found_vnode = NULL;
-		int ret = current_vnode->v_ops->lookup(current_vnode, &found_vnode, current_component_name);
-		
-		current_vnode->ref_count--; // Release previous current_vnode reference
+        if (strcmp(next_component, ".") == 0) {
+            // '.' 指向當前目錄，不需要改變 current_vnode，但需要增加引用計數（因為我們期望返回一個新的引用）
+            // 由於 current_vnode 已經持有引用，這裡什麼都不做，或者說 found_vnode = current_vnode; current_vnode->ref_count++;
+            // 但因為下面會 current_vnode->ref_count--; 然後 current_vnode = found_vnode; 所以實際上是平衡的
+            found_vnode = current_vnode;
+            found_vnode->ref_count++; // 為 "found_vnode" 增加一次引用
+        } else if (strcmp(next_component, "..") == 0) {
+            if (!current_vnode->v_ops || !current_vnode->v_ops->lookup_parent) { // 需要新的 vnode_operation
+                current_vnode->ref_count--;
+                return E_INVAL; // 不支援查找父目錄
+            }
+            // 查找父目錄
+            int ret_parent = current_vnode->v_ops->lookup_parent(current_vnode, &found_vnode, root_node);
+            if (ret_parent != E_OK) {
+                current_vnode->ref_count--;
+                return ret_parent;
+            }
+            // lookup_parent 應該已經處理了 found_vnode 的 ref_count
+        } else {
+            // 一般組件查找
+            if (!current_vnode->v_ops || !current_vnode->v_ops->lookup) {
+                current_vnode->ref_count--;
+                return E_INVAL;
+            }
+            int ret_lookup = current_vnode->v_ops->lookup(current_vnode, &found_vnode, next_component);
+            if (ret_lookup != E_OK) {
+                current_vnode->ref_count--;
+                return ret_lookup;
+            }
+            // lookup 應該已經處理了 found_vnode 的 ref_count
+        }
 
-		if (ret != E_OK) {
-			uart_send_string("[vfs_lookup] component '");
-			uart_send_string(current_component_name);
-			uart_send_string("' not found or error ");
-			uart_send_int(ret);
-			uart_send_string("\r\n");
-			return ret; // Not found or other error
-		}
-		current_vnode = found_vnode; // found_vnode 已經被 lookup 增加了引用計數
+        current_vnode->ref_count--; // 釋放對上一級 current_vnode 的引用
+        current_vnode = found_vnode; // found_vnode 已經被其查找函數增加了引用計數
 
-		// 檢查是否為掛載點 (Basic Exercise 2 的內容，但 lookup 需要這個邏輯)
-		// 這裡用一個簡化的檢查：如果 current_vnode->mount 不是 NULL 且和父節點的 mount 不同
-		// 檢查 current_vnode 是否為掛載點 (host_vnode)
-		struct mount* jumped_mount = NULL;
-		for (int i = 0; i <num_mounted_fs; ++i) {
-			uart_send_string("[vfs_lookup] Checking mount point '");
-			uart_send_hex(mounted_fs_list[i]->mount_point_vnode);
-			uart_send_string("'\r\nagainst current vnode '");
-			uart_send_hex(current_vnode);
-			uart_send_string("'\r\n");
-			if (mounted_fs_list[i]->mount_point_vnode == current_vnode) {
-				jumped_mount = mounted_fs_list[i];
-				break;
-			}
-		}
+        // 檢查掛載點 (這部分邏輯來自你之前的代碼，並已修正)
+        struct mount* jumped_mount = NULL;
+        for (int i = 0; i < num_mounted_fs; ++i) {
+            if (mounted_fs_list[i]->mount_point_vnode == current_vnode) {
+                jumped_mount = mounted_fs_list[i];
+                uart_send_string("[vfs_resolve_path] Matched mount_point_vnode: '");
+                if (current_vnode->internal) uart_send_string(((tmpfs_inode_t*)current_vnode->internal)->name);
+                uart_send_string("'\r\n");
+                break;
+            }
+        }
+        if (jumped_mount) {
+            uart_send_string("[vfs_resolve_path] Crossing mount point from '");
+            if (current_vnode->internal) uart_send_string(((tmpfs_inode_t*)current_vnode->internal)->name);
+            uart_send_string("' to FS '"); uart_send_string(jumped_mount->fs->name);
+            uart_send_string("'s root '");
+            if (jumped_mount->root && jumped_mount->root->internal) uart_send_string(((tmpfs_inode_t*)jumped_mount->root->internal)->name);
+            uart_send_string("'\r\n");
 
-		if (jumped_mount) {
-			// 這是掛載點！需要跳轉到被掛載檔案系統的根 vnode
-			uart_send_string("[vfs_lookup] Crossing mount point from '");
-			uart_send_string(((tmpfs_inode_t*)current_vnode->internal)->name); // Assuming tmpfs_inode for debug
-			uart_send_string("' to filesystem '");
-			uart_send_string(jumped_mount->fs->name);
-			uart_send_string("' root '");
-			uart_send_string(((tmpfs_inode_t*)jumped_mount->root->internal)->name); // Assuming tmpfs_inode for debug
-			uart_send_string("'\r\n");
+            current_vnode->ref_count--;      // 釋放對 mount_point_vnode 的引用
+            current_vnode = jumped_mount->root; // 跳到 guest root
+            current_vnode->ref_count++;      // 增加對 guest root 的引用
+        }
+    }
 
-			current_vnode->ref_count--; // 釋放舊的 current_vnode 的引用 (因為現在要換了)
-			current_vnode = jumped_mount->root; // 跳轉到新的檔案系統的根 vnode
-			current_vnode->ref_count++; // 增加新的 current_vnode (即 guest root) 的引用計數
-		}
-	}
-
-	*target = current_vnode; // current_vnode 的引用計數是正確的
-	uart_send_string("[vfs_lookup] Path '");
-	uart_send_string(pathname);
-	uart_send_string("' resolved to vnode '");
-	uart_send_string(((tmpfs_inode_t*)(*target)->internal)->name);
-	uart_send_string("'\r\n");
-	return E_OK;
+    *target = current_vnode; // current_vnode 應已持有正確的引用計數
+    uart_send_string("[vfs_resolve_path] Resolved '"); uart_send_string(pathname);
+    uart_send_string("' to vnode '");
+    if ((*target)->internal) uart_send_string(((tmpfs_inode_t*)(*target)->internal)->name);
+    uart_send_string("'\r\n");
+    return E_OK;
 }
-
-
+int vfs_lookup(const char* pathname, struct vnode** target) {
+    // 這個舊的 vfs_lookup 假設是從全域 rootfs 開始的絕對路徑查找
+    // Basic 3 中，大部分查找應該基於任務的 cwd 和 root_dir
+    thread_t* current_task = get_current();
+    if (!current_task) { // 內核早期或特殊情況
+        if (pathname[0] != '/') return E_INVAL; // 沒有 CWD 就只能是絕對路徑
+        return vfs_resolve_path(pathname, NULL, rootfs->root, target);
+    }
+    return vfs_resolve_path(pathname, current_task->cwd, current_task->root_dir, target);
+}
 // --- VFS API 實作 ---
 int vfs_open(const char* pathname, int flags, struct file** target_file) {
 	if (!pathname || !target_file) return E_INVAL;
@@ -229,77 +237,87 @@ int vfs_open(const char* pathname, int flags, struct file** target_file) {
 	uart_send_int(flags);
 	uart_send_string("\r\n");
 
-	struct vnode* node_to_open = NULL;
-	int ret = vfs_lookup(pathname, &node_to_open);
+	thread_t* current_task = get_current();
+    if (!current_task) return E_INVAL; // 或者 E_INVAL，沒有當前任務上下文
+
+    struct vnode* node_to_open = NULL;
+    // 使用 vfs_resolve_path 進行路徑解析
+    int ret = vfs_resolve_path(pathname, current_task->cwd, current_task->root_dir, &node_to_open);
 
 	if (ret != E_OK) {
-		if (ret == E_NOENT && (flags & O_CREAT)) { // O_CREAT 旗標在 vfs.h 中未定義，需要自行定義
-			// 檔案不存在，但有 O_CREAT 旗標，嘗試建立檔案
-			// 1. 找到父目錄和檔名
-			char path_copy[MAX_PATHNAME_LEN + 1];
-			strcpy(path_copy, pathname);
-			path_copy[MAX_PATHNAME_LEN] = '\0';
+        if (ret == E_NOENT && (flags & O_CREAT)) {
+            // 處理 O_CREAT: 需要找到父目錄和檔名
+            // 這部分邏輯也需要使用 vfs_resolve_path 來找到父目錄
+            char path_copy_for_create[MAX_PATHNAME_LEN + 1];
+            strcpy(path_copy_for_create, pathname);
+            path_copy_for_create[MAX_PATHNAME_LEN] = '\0';
 
-			char* last_slash = strrchr(path_copy, '/');
-			struct vnode* parent_dir_vnode = NULL;
-			const char* filename = NULL;
+            char* last_slash = strrchr(path_copy_for_create, '/');
+            struct vnode* parent_dir_vnode = NULL;
+            const char* filename_to_create = NULL;
+            char parent_path_buffer[MAX_PATHNAME_LEN +1];
 
-			if (last_slash) {
-				if (last_slash == path_copy) { // e.g., "/file"
-					filename = last_slash + 1;
-					*(last_slash+1) = '\0'; // path_copy will be "/"
-					int lookup_ret = vfs_lookup("/", &parent_dir_vnode);
-					if(lookup_ret != E_OK) {
-						uart_send_string("[vfs_open] (O_CREAT): failed to lookup parent '/'\r\n");
-						return lookup_ret;
-					}
+            if (last_slash) { // e.g., "/path/to/file" or "path/to/file"
+                if (last_slash == path_copy_for_create && path_copy_for_create[0] == '/') { // e.g. "/file"
+                    filename_to_create = last_slash + 1;
+                    strcpy(parent_path_buffer, "/");
+                } else {
+                    filename_to_create = last_slash + 1;
+                    *last_slash = '\0'; // path_copy_for_create 現在是父目錄路徑
+                    strcpy(parent_path_buffer, path_copy_for_create);
+                }
+            } else { // e.g. "file" (在 CWD 下)
+                filename_to_create = path_copy_for_create;
+                // 父目錄就是 CWD，但我們需要一個路徑字串來 resolve CWD
+                // 這裡有一個小問題：如果 CWD 本身沒有一個規範的路徑字串，如何傳給 vfs_resolve_path？
+                // 解決方法1: 直接使用 current_task->cwd 作為 parent_dir_vnode
+                // 解決方法2: vfs_resolve_path 可以接受 "." 來代表 base_node
+                strcpy(parent_path_buffer, "."); // 或者傳遞一個特殊標記
+            }
+            parent_path_buffer[MAX_PATHNAME_LEN] = '\0';
 
-				} else { // e.g., "/dir/file"
-					filename = last_slash + 1;
-					*last_slash = '\0'; // path_copy is now parent dir path
-					int lookup_ret = vfs_lookup(path_copy, &parent_dir_vnode);
-					if(lookup_ret != E_OK) {
-						uart_send_string("[vfs_open] (O_CREAT): failed to lookup parent '\r\n");
-						uart_send_string(path_copy);
-						uart_send_string("'\r\n");
-						return lookup_ret;
-					}
-				}
-			} else { // e.g., "file" (相對路徑，Basic 1 假設都是絕對路徑)
-				uart_send_string("[vfs_open] (O_CREAT): relative path creation not supported in this example.\r\n");
-				return E_INVAL;
-			}
-			
-			if (strlen(filename) == 0) { // e.g. path ends with /
-				if(parent_dir_vnode) parent_dir_vnode->ref_count--;
-				return E_ISDIR; // Cannot create a file with empty name or named "/"
-			}
+            if (strlen(filename_to_create) == 0) return E_INVAL; // 不能創建名為空的檔案
 
-			if (!parent_dir_vnode->v_ops || !parent_dir_vnode->v_ops->create) {
-				parent_dir_vnode->ref_count--;
-				return E_INVAL; // Parent doesn't support create
-			}
+            // 解析父目錄
+            int parent_ret;
+            if (last_slash == NULL) { // 創建在 CWD
+                parent_dir_vnode = current_task->cwd;
+                parent_dir_vnode->ref_count++; // 手動增加引用，因為我們直接用了它
+                parent_ret = E_OK;
+            } else {
+                parent_ret = vfs_resolve_path(parent_path_buffer, current_task->cwd, current_task->root_dir, &parent_dir_vnode);
+            }
 
-			uart_send_string("[vfs_open] (O_CREAT): creating '");
-			uart_send_string(filename);
-			uart_send_string("' in dir '");
-			uart_send_string(((tmpfs_inode_t*)parent_dir_vnode->internal)->name);
-			uart_send_string("'\r\n");
-			ret = parent_dir_vnode->v_ops->create(parent_dir_vnode, &node_to_open, filename);
-			parent_dir_vnode->ref_count--; // Release ref from lookup
+            if (parent_ret != E_OK) {
+                uart_send_string("[vfs_open] (O_CREAT) Failed to resolve parent dir '");
+                uart_send_string(parent_path_buffer); uart_send_string("'\r\n");
+                return parent_ret;
+            }
 
-			if (ret != E_OK) {
-				uart_send_string("[vfs_open] (O_CREAT): create failed with ");
-				uart_send_int(ret);
-				uart_send_string("\r\n");
-				return ret;
-			}
-			// node_to_open 的 ref_count 已經被 create 設定
-		} else {
-			// 查找失敗且沒有 O_CREAT，或 O_CREAT 但其他錯誤
-			return ret;
-		}
-	}
+            // ... (原有的 create 邏輯，使用 parent_dir_vnode 和 filename_to_create) ...
+            // ... 記得在 create 之後 parent_dir_vnode->ref_count--; ...
+            // (這部分 create 的邏輯你需要重構以適應新的 resolve 方式)
+            // 這裡省略了 O_CREAT 的詳細重構，它比較複雜
+             uart_send_string("[vfs_open] O_CREAT for '"); uart_send_string(pathname);
+             uart_send_string("' (filename '"); uart_send_string(filename_to_create);
+             uart_send_string("') in dir '"); uart_send_string(((tmpfs_inode_t*)parent_dir_vnode->internal)->name);
+             uart_send_string("'\r\n");
+
+             if (!parent_dir_vnode->v_ops || !parent_dir_vnode->v_ops->create) {
+                 parent_dir_vnode->ref_count--;
+                 return E_INVAL;
+             }
+             ret = parent_dir_vnode->v_ops->create(parent_dir_vnode, &node_to_open, filename_to_create);
+             parent_dir_vnode->ref_count--; // 釋放 lookup (或直接使用 CWD) 得到的 parent ref
+
+             if (ret != E_OK) {
+                 return ret;
+             }
+             // node_to_open 的 ref_count 已被 create 設定
+        } else {
+            return ret; // 查找失敗且沒有 O_CREAT，或 O_CREAT 但其他錯誤
+        }
+    }
 
 	// 檢查節點類型 (例如，不能 open 一個目錄來讀寫內容，除非是 readdir)
 	if (node_to_open->type == VNODE_DIR && !(flags & O_DIRECTORY)) { // O_DIRECTORY 也是需要自己定義的旗標
@@ -332,16 +350,15 @@ int vfs_open(const char* pathname, int flags, struct file** target_file) {
 		}
 	}
 
-	// (為 Basic 3 準備) 分配一個 fd
-	// 這裡用一個非常簡化的全域 fd 表
+	// 分配 fd 到 current_task->fd_table
 	int fd = -1;
-	for(int i=0; i < MAX_OPEN_FILES_PER_PROCESS; ++i) {
-		if(global_fd_table[i] == NULL) {
-			global_fd_table[i] = new_file;
-			fd = i;
-			break;
-		}
-	}
+    for(int i = 0; i < MAX_PROCESS_OPEN_FILES; ++i) { // 使用 MAX_PROCESS_OPEN_FILES
+        if(current_task->fd_table[i] == NULL) {
+            current_task->fd_table[i] = new_file;
+            fd = i;
+            break;
+        }
+    }
 	if (fd == -1) {
 		// fd 表滿了
 		if (new_file->f_ops && new_file->f_ops->close) { // 嘗試回滾 FS 層的 open
@@ -369,11 +386,11 @@ int vfs_close(struct file* file_to_close) {
 	uart_send_string("[vfs_close] closing file for vnode '");
 	uart_send_string(((tmpfs_inode_t*)file_to_close->vnode->internal)->name);
 	uart_send_string("'\r\n");
-
+	thread_t* current_task=get_current();
 	// (為 Basic 3 準備) 從 fd 表中移除
 	for(int i=0; i < MAX_OPEN_FILES_PER_PROCESS; ++i) {
-		if(global_fd_table[i] == file_to_close) {
-			global_fd_table[i] = NULL;
+		if(current_task->fd_table[i] == file_to_close) {
+			current_task->fd_table[i] = NULL;
 			break;
 		}
 	}
@@ -383,18 +400,11 @@ int vfs_close(struct file* file_to_close) {
 	}
 
 	file_to_close->vnode->ref_count--; // 釋放對 vnode 的引用
-	if (file_to_close->vnode->ref_count == 0) {
-		// TODO: 如果 vnode 的引用計數為0，並且沒有被其他 file handle 引用，
-		// 且檔案已被 unlink，則可以考慮釋放 vnode 和其 internal node 的資源。
-		// 這部分比較複雜，涉及到 unlink 和快取。Basic 1 可先忽略。
-		uart_send_string("[vfs_close] vnode '");
-		uart_send_string(((tmpfs_inode_t*)file_to_close->vnode->internal)->name);
-		uart_send_string("' ref_count is now ");
-		uart_send_int(file_to_close->vnode->ref_count);
-		uart_send_string(", should be freed if 0.\r\n");
-		// dynamic_free(file_to_close->vnode->internal); // 需小心，如果 internal 被共享
-		// dynamic_free(file_to_close->vnode);
-	}
+	uart_send_string("[vfs_close] vnode '");
+	uart_send_string(((tmpfs_inode_t*)file_to_close->vnode->internal)->name);
+	uart_send_string("' ref_count is now ");
+	uart_send_int(file_to_close->vnode->ref_count);
+	uart_send_string(", should be freed if 0.\r\n");
 
 	dynamic_free(file_to_close); // 釋放 file handle 結構本身
 	return E_OK;
@@ -500,88 +510,147 @@ int vfs_mount(const char* target_path, const char* fs_name) {
 
     if (!target_path || !fs_name) return E_INVAL;
 
-    // 1. 查找掛載點 (host_vnode)
-    struct vnode* host_vnode = NULL;
-    int ret = vfs_lookup(target_path, &host_vnode);
-    if (ret != E_OK) {
-        uart_send_string("[vfs_mount] Target path lookup failed: ");
-        uart_send_int(ret);
-        uart_send_string("\r\n");
-        return ret; // Target path not found or other error
+    thread_t* current_task = get_current(); // 假設的，vfs_mount 可能不總是有任務上下文
+                                         // 如果 vfs_mount 只在內核初始化等特定階段被調用，
+                                         // 且 target_path 總是絕對路徑，則不需要 current_task->cwd
+                                         // 但查找 host_vnode 的父節點時，還是需要一個 "root_node" 參考點
+    if (!current_task && strcmp(target_path, "/") != 0) { // 掛載根目錄時可能沒有 current_task
+        uart_send_string("Error: [vfs_mount] No current task for non-root mount path resolution.\r\n");
+        // return -E_PERM; // 如果 mount 可以由 user space 觸發，則需要 task
     }
 
-    // 掛載點必須是目錄 (除非是覆蓋根目錄，但這裡假設不是)
+
+    // 1. 查找掛載點 (host_vnode)
+    struct vnode* host_vnode = NULL;
+    // vfs_lookup 應該使用 vfs_resolve_path，它需要 cwd 和 root_dir
+    // 如果是在內核初始化時掛載 rootfs，vfs_lookup 可能有特殊處理或直接調用 setup_mount
+    // 這裡我們假設 vfs_lookup 能正確工作
+    int ret = vfs_lookup(target_path, &host_vnode); // vfs_lookup 內部會調用 vfs_resolve_path
+    if (ret != E_OK) {
+        uart_send_string("[vfs_mount] Target path lookup failed for '");
+        uart_send_string(target_path); uart_send_string("': ");
+        uart_send_int(ret);
+        uart_send_string("\r\n");
+        return ret;
+    }
+
     if (host_vnode->type != VNODE_DIR) {
-        uart_send_string("[vfs_mount] Target path is not a directory. Cannot mount.\r\n");
-        host_vnode->ref_count--; // Release the ref from lookup
+        uart_send_string("[vfs_mount] Target path '");
+        uart_send_string(target_path); uart_send_string("' is not a directory.\r\n");
+        host_vnode->ref_count--;
         return E_NOTDIR;
     }
 
-    // 檢查是否已經有檔案系統掛載在 host_vnode 上
-    // 遍歷已掛載的檔案系統，檢查是否有 mount->host_vnode == host_vnode
-    for (int i = 0; i <num_mounted_fs; ++i) {
-        if (mounted_fs_list[i]->root == host_vnode) {
-            uart_send_string("[vfs_mount] A filesystem is already mounted at this target.\r\n");
-            host_vnode->ref_count--; // Release the ref from lookup
-            return E_BUSY; // Device or resource busy
+    for (int i = 0; i < num_mounted_fs; ++i) {
+        if (mounted_fs_list[i]->mount_point_vnode == host_vnode) { // 比較 mount_point_vnode
+            uart_send_string("[vfs_mount] A filesystem is already mounted at '");
+            uart_send_string(target_path); uart_send_string("'.\r\n");
+            host_vnode->ref_count--;
+            return E_BUSY;
         }
     }
-
-
-    // 2. 查找檔案系統類型
+	// 2. find filesystem type
     struct filesystem* fs_type = find_filesystem(fs_name);
     if (!fs_type) {
         uart_send_string("[vfs_mount] Filesystem type '");
         uart_send_string(fs_name);
         uart_send_string("' not found.\r\n");
-        host_vnode->ref_count--; // Release the ref from lookup
-        return E_NOENT; // No such filesystem
+        host_vnode->ref_count--;
+        return E_NOENT;
     }
-
-    // 3. 建立新的 mount 結構
+	//3. allocate new mount structure
     struct mount* new_mount = (struct mount*)dynamic_malloc(sizeof(struct mount));
     if (!new_mount) {
-        uart_send_string("[vfs_mount] Failed to allocate memory for new mount structure.\r\n");
-        host_vnode->ref_count--; // Release the ref from lookup
+        uart_send_string("[vfs_mount] Failed to allocate memory for new_mount.\r\n");
+        host_vnode->ref_count--;
         return E_NOMEM;
     }
-    memset(new_mount, 0, sizeof(struct mount)); // 清零以避免垃圾值
+    memset(new_mount, 0, sizeof(struct mount));
 
-    new_mount->mount_point_vnode = host_vnode;
-	uart_send_string("[vfs_mount] Mount point vnode: '");
-	uart_send_hex((uint64_t)host_vnode);
-	uart_send_string("'\r\n");
-    // 4. 呼叫檔案系統的 setup_mount
-    ret = fs_type->setup_mount(fs_type, new_mount);
+    new_mount->mount_point_vnode = host_vnode; // host_vnode 的引用被 new_mount 持有
+    new_mount->fs = fs_type;
+
+
+    // 4. 查找 host_vnode (掛載點) 的父節點
+    struct vnode* mount_point_parent_vnode = NULL;
+    if (host_vnode == rootfs->root) { // 如果掛載點是 VFS 的根
+        // VFS 根的 ".." 通常是它自己，所以其父節點可以認為是它自己或 NULL
+        // 傳遞 NULL 或 host_vnode 本身給 setup_mount，由它決定如何處理
+        mount_point_parent_vnode = host_vnode; // 或者 NULL，取決於 setup_mount 的期望
+        mount_point_parent_vnode->ref_count++; // 如果不是 NULL，則增加引用
+        uart_send_string("[vfs_mount] Mount point is VFS root. Parent considered itself (or NULL).\r\n");
+    } else {
+        // 檢查 host_vnode 是否有 lookup_parent 操作
+        if (!host_vnode->v_ops || !host_vnode->v_ops->lookup_parent) {
+            uart_send_string("Error: [vfs_mount] host_vnode does not support lookup_parent.\r\n");
+            dynamic_free(new_mount);
+            host_vnode->ref_count--; // 釋放 host_vnode 的引用
+            return E_INVAL;
+        }
+        // 呼叫 host_vnode 所屬檔案系統的 lookup_parent
+        // task_root_node 參數：對於 lookup_parent，它通常用於 chroot 邊界檢查。
+        // 在 mount 的上下文中，我們關心的是 host_vnode 在其 *自身檔案系統* 中的父節點。
+        // rootfs->root 可以作為一個安全的 "邊界" 參考。
+        ret = host_vnode->v_ops->lookup_parent(host_vnode, &mount_point_parent_vnode, rootfs->root);
+        if (ret != E_OK) {
+            uart_send_string("[vfs_mount] Failed to find parent of mount point '");
+            uart_send_string(target_path); uart_send_string("': ");
+            uart_send_int(ret); uart_send_string("\r\n");
+            dynamic_free(new_mount);
+            host_vnode->ref_count--; // 釋放 host_vnode 的引用
+            return ret;
+        }
+        // lookup_parent 成功，mount_point_parent_vnode 的 ref_count 已被增加
+        uart_send_string("[vfs_mount] Parent of mount point '");
+        if (host_vnode->internal) uart_send_string(((tmpfs_inode_t*)host_vnode->internal)->name);
+        uart_send_string("' is '");
+        if (mount_point_parent_vnode && mount_point_parent_vnode->internal) uart_send_string(((tmpfs_inode_t*)mount_point_parent_vnode->internal)->name);
+        else uart_send_string("Error:[vfs_mount] UNKNOWN_PARENT_NAME");
+        uart_send_string("'.\r\n");
+    }
+
+    // 5. 呼叫檔案系統的 setup_mount，傳入 mount_point_parent_vnode
+    // 確保 fs_type->setup_mount 的簽名已更新
+    ret = fs_type->setup_mount(fs_type, new_mount, mount_point_parent_vnode);
+
+    // setup_mount 使用完 mount_point_parent_vnode 後，我們需要釋放由 lookup_parent 增加的引用
+    if (mount_point_parent_vnode) {
+        mount_point_parent_vnode->ref_count--;
+    }
+
     if (ret != E_OK) {
-        uart_send_string("[vfs_mount] Filesystem setup_mount failed with error ");
-        uart_send_int(ret);
-        uart_send_string(".\r\n");
+        uart_send_string("[vfs_mount] Filesystem setup_mount failed: ");
+        uart_send_int(ret); uart_send_string(".\r\n");
         dynamic_free(new_mount);
-        host_vnode->ref_count--; // Release the ref from lookup
+        host_vnode->ref_count--; // 釋放 host_vnode 的引用
         return ret;
     }
 
-    // 5. 將新掛載加入 VFS 的全局掛載列表
+    // 6. 將新掛載加入 VFS 的全局掛載列表
     if (num_mounted_fs >= MAX_MOUNTED_FS) {
-        uart_send_string("[vfs_mount] Mounted filesystem list is full. Cannot mount.\r\n");
-        // 需要額外清理 new_mount->root (guest_vnode) 和其 internal node
-        // 這會根據 tmpfs 的實現而定，可能需要一個 tmpfs_destroy_vnode 函式
+        uart_send_string("[vfs_mount] Mounted filesystem list full.\r\n");
+        // 清理: guest root (new_mount->root), new_mount 結構
+        if (new_mount->root) {
+            if(new_mount->root->internal) dynamic_free(new_mount->root->internal);
+            dynamic_free(new_mount->root);
+        }
         dynamic_free(new_mount);
-        host_vnode->ref_count--; // Release the ref from lookup
-        return E_NOMEM; // Or E_FULL
+        host_vnode->ref_count--; // 釋放 host_vnode 的引用
+        return E_NOMEM;
     }
     mounted_fs_list[num_mounted_fs++] = new_mount;
 
     uart_send_string("[vfs_mount] Successfully mounted '");
-    uart_send_string(fs_name);
-    uart_send_string("' at '");
-    uart_send_string(target_path);
-    uart_send_string("'\r\n");
-    
-    // 釋放 vfs_lookup 增加的 host_vnode 引用計數
-    host_vnode->ref_count--; 
-    
+    uart_send_string(fs_name); uart_send_string("' at '"); uart_send_string(target_path);
+    uart_send_string("'. mount_point_vnode: '");
+    if(new_mount->mount_point_vnode->internal) uart_send_string(((tmpfs_inode_t*)new_mount->mount_point_vnode->internal)->name);
+    uart_send_string("', guest_root: '");
+    if(new_mount->root->internal) uart_send_string(((tmpfs_inode_t*)new_mount->root->internal)->name);
+    uart_send_string("'.\r\n");
+
+    // host_vnode 的引用已被 new_mount->mount_point_vnode 持有，所以這裡不減少。
+    // (除非 unmount 時才減少)
+
     return E_OK;
 }
 

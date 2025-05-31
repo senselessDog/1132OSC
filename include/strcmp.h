@@ -7,7 +7,9 @@
 // String comparison
 int strcmp(const char *s1, const char *s2);
 int strncmp(const char *s1, const char *s2, uint32_t n);
-
+char *strrchr(const char *str, int c);
+char *strchr(const char *str, int c);
+char* strncpy(char *dest, const char *src, size_t n);
 // String conversion
 long strtol(const char *nptr, char **endptr, int base);
 int atoi(const char *str);

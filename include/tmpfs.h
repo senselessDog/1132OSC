@@ -26,14 +26,14 @@ typedef struct tmpfs_inode {
 
     struct vnode* v_node; // 指回包含此 internal node 的 vnode (方便操作)
     // 可以加入指向父 tmpfs_inode 的指標，方便實作 ".."
-    // struct tmpfs_inode* parent_inode;
+    struct tmpfs_inode* parent_dir_internal; // 指向父目錄的 internal node
 } tmpfs_inode_t;
 
 // 初始化 tmpfs 檔案系統 (註冊到 VFS)
 void tmpfs_init();
 
 // tmpfs 的 setup_mount 函數 (符合 filesystem->setup_mount 的簽名)
-int tmpfs_setup_mount(struct filesystem* fs, struct mount* mount);
+// int tmpfs_setup_mount(struct filesystem* fs, struct mount* mount);
 
 // tmpfs 的 file_operations
 extern struct file_operations tmpfs_file_ops;

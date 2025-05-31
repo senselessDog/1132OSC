@@ -77,7 +77,7 @@ qemu_video:
 	-device usb-kbd \
 	-device usb-mouse
 show_qemu:
-	sudo minicom -D /dev/pts/7 -b 115200
+	sudo minicom -D /dev/pts/3 -b 115200
 gdb_init:
 	gdb-multiarch -x .gdbinit
 python:

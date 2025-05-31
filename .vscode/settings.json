@@ -10,7 +10,8 @@
         "compare": "c",
         "limits": "c",
         "new": "c",
-        "uart.h": "c"
+        "uart.h": "c",
+        "locale_t.h": "c"
     },
     "makefile.configureOnOpen": false
 }

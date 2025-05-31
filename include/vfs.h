@@ -64,6 +64,7 @@ struct vnode_operations {
     // component_name: 要建立的目錄名稱
     // 返回: 0 表示成功，錯誤碼 (負值) 表示失敗
     int (*mkdir)(struct vnode* dir_node, struct vnode** target, const char* component_name); //
+    int (*lookup_parent)(struct vnode* dir_node, struct vnode** target_parent, struct vnode* task_root_node);
 };
 enum VNODE_TYPE {
     VNODE_DIR,  // 或者你之前用的 VNODE_DIR
@@ -102,7 +103,7 @@ struct filesystem {
     // fs:     指向這個 filesystem 結構本身
     // mount:  (輸出參數) 指向要被初始化的 mount 結構
     // 返回: 0 表示成功，錯誤碼 (負值) 表示失敗
-    int (*setup_mount)(struct filesystem* fs, struct mount* mount); //
+    int (*setup_mount)(struct filesystem* fs, struct mount* mount, struct vnode* logical_parent_of_mount_point); //
     // 你可以在這裡加入檔案系統註冊到 VFS 時需要的其他函式指標，例如 unmount
 };
 
@@ -119,10 +120,12 @@ int vfs_read(struct file* file, void* buf, size_t len); //
 int vfs_mkdir(const char* pathname); //
 int vfs_mount(const char* target_path, const char* fs_name); // 類似於 vfs_mount(const char* target, const char* filesystem)
 int vfs_lookup(const char* pathname, struct vnode** target); //
-
+int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode* root_node, struct vnode** target);
 // 輔助：錯誤碼 (可以定義更多)
 #define E_OK      0  // 成功
+#define E_PERM   -1  // Operation not permitted
 #define E_NOENT  -2  // No such file or directory
+#define E_BADF   -9  // Bad file descriptor
 #define E_EXIST  -17 // File exists
 #define E_INVAL  -22 // Invalid argument
 #define E_NOMEM  -12 // Out of memory
@@ -142,7 +145,12 @@ int vfs_lookup(const char* pathname, struct vnode** target); //
 #define MAX_REGISTERED_FS 8
 #define MAX_MOUNTED_FS 8 // 假設最多可以掛載8個檔案系統
 
+//Lab7 basic:3
+#define MAX_PROCESS_OPEN_FILES 16
 extern struct mount* mounted_fs_list[MAX_MOUNTED_FS];
 extern int num_mounted_fs;
-
+extern int first_mount_fs;
+// 簡化版：全域只有一個檔案描述符表 (真正的系統中每個 process 有自己的)
+#define MAX_OPEN_FILES_PER_PROCESS 16 // (對應 fd < 16)
+#define MAX_PATHNAME_LEN 255
 #endif // VFS_H

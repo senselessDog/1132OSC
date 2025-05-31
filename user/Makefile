@@ -3,7 +3,7 @@ CFLAGS = -Wall -nostdlib -nostartfiles -ffreestanding
 # CFLAGS = -fno-stack-protector -ffreestanding -nostdlib -nostartfiles
 LDFLAGS = -T fork_test.ld
 
-all: userProcessStatus.img fork_test.img
+all: userProcessStatus.img fork_test.img upload_img
 
 userProcessStatus.img: userProcessStatus.o
 	$(ARMGNU)-ld  -o userProcessStatus.elf userProcessStatus.o
@@ -17,7 +17,10 @@ fork_test.img: fork_test.o
 	cp ./fork_test.img ../rootfs/
 	cp ./vm.img ../rootfs/
 	(cd ../rootfs/ && find . | cpio -o -H newc > ../initramfs.cpio)
-
+upload_img:
+	cp ./vm.img ../rootfs/
+	cp ./vfs1.img ../rootfs/
+	(cd ../rootfs/ && find . | cpio -o -H newc > ../initramfs.cpio)
 userProcessStatus.o: userProcessStatus.S
 	$(ARMGNU)-gcc -MMD -c $< -o $@
 

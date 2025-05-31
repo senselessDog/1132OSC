@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "syscall.h"
+#include "vfs.h"
 #define THREAD_STACK_SIZE 4096
 #define MAX_THREADS 64
 #define Handler_STACK_SIZE 4096
@@ -47,6 +48,10 @@ typedef struct thread{
     void * handler_stack_ptr;
     //for mmap
     struct vm_area_struct *vma_list; // 指向 VMA 鏈結串列的頭部
+    // Lab7 --- Basic Exercise 3: VFS 相關成員 ---
+    struct vnode* cwd;      // Current Working Directory
+    struct vnode* root_dir; // Root directory for this task (for chroot, 可選)
+    struct file* fd_table[MAX_PROCESS_OPEN_FILES]; // File Descriptor Table
 } thread_t;
 
 // --- System Call Numbers ---
@@ -62,7 +67,14 @@ typedef struct thread{
 #define SYS_SIGNAL      8
 #define SYS_KILL_SIG    9
 #define SYS_MMAP        10
-#define SYS_SIGRETURN   11
+#define SYS_OPEN        11
+#define SYS_CLOSE       12
+#define SYS_WRITE       13
+#define SYS_READ        14
+#define SYS_MKDIR       15
+#define SYS_MOUNT       16
+#define SYS_CHDIR       17
+#define SYS_SIGRETURN   18
 // Add more if needed, e.g., for signals later
 
 // Thread management functions

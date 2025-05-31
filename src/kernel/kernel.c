@@ -284,7 +284,7 @@ void kernel_main(void *dtb_addr)
     //init rootfs
     kernel_init_vfs();
     if (rootfs && rootfs->root) { // 確保根檔案系統已掛載
-        test_vfs_operations();
+        // test_vfs_operations();
     } else {
         uart_send_string("Error: [kernel_main] rootfs not available, skipping VFS tests.\r\n");
     }

@@ -151,6 +151,33 @@ int tmpfs_lookup(struct vnode* dir_node, struct vnode** target, const char* comp
 	uart_send_string("'\r\n");
 	return E_NOENT; // Not found
 }
+int tmpfs_lookup_parent(struct vnode* dir_node, struct vnode** target_parent, struct vnode* task_root_node) {
+    if (!dir_node || !dir_node->internal || !target_parent || !task_root_node) return E_INVAL;
+    tmpfs_inode_t* current_internal = (tmpfs_inode_t*)dir_node->internal;
+
+    // 檢查是否是某個掛載點的根 (guest root)
+    // 如果 current_vnode 是某個 mounted_fs_list[i]->root，則 ".." 應該跳出到 mounted_fs_list[i]->mount_point_vnode 的父目錄
+    // 這部分的邏輯在 VFS 層處理 ".." 時更合適，底層 FS 的 lookup_parent 應該只返回其 FS 內的父節點
+    // 但 "if the root vnode is mounted on a vnode, VFS should go to the mounted vnode" - 這句話針對 lookup，不是 ".."
+    // "other wise, “..” behaves like “.”" - 這適用於 FS 根。
+
+    // tmpfs 內部的父節點查找
+    if (current_internal->parent_dir_internal != NULL && current_internal->parent_dir_internal->v_node != NULL) {
+        *target_parent = current_internal->parent_dir_internal->v_node;
+        (*target_parent)->ref_count++;
+        uart_send_string("[tmpfs_lookup_parent] Parent of '"); uart_send_string(current_internal->name);
+        uart_send_string("' is '"); uart_send_string(current_internal->parent_dir_internal->name); uart_send_string("'\r\n");
+        return E_OK;
+    } else {
+        // 沒有父節點（例如，它是 tmpfs 的根），根據講義，".." 表現得像 "."
+        *target_parent = dir_node; // 指回自己
+        (*target_parent)->ref_count++;
+        uart_send_string("[tmpfs_lookup_parent] '"); uart_send_string(current_internal->name);
+        uart_send_string("' has no parent in this tmpfs, '..' is itself.\r\n");
+        return E_OK;
+    }
+    return E_NOENT; // 正常情況下不應該到這裡如果上面邏輯完整
+}
 
 int tmpfs_create_common(struct vnode* dir_node, struct vnode** target, const char* component_name, enum TMPFS_TYPE type, enum VNODE_TYPE v_type) {
 	if (!dir_node || !dir_node->internal || !target || !component_name) return E_INVAL;
@@ -174,7 +201,8 @@ int tmpfs_create_common(struct vnode* dir_node, struct vnode** target, const cha
 	// 1. 建立 tmpfs 內部節點
 	tmpfs_inode_t* new_internal_node = create_tmpfs_internal_node(component_name, type, NULL); // v_node 稍後填
 	if (!new_internal_node) return E_NOMEM;
-
+	//important
+	new_internal_node->parent_dir_internal = parent_internal;
 	// 2. 建立 vnode
 	struct vnode* new_vnode = create_tmpfs_vnode(dir_node->mount, new_internal_node, v_type);
 	if (!new_vnode) {
@@ -213,14 +241,15 @@ int tmpfs_mkdir(struct vnode* dir_node, struct vnode** target, const char* compo
 
 
 struct vnode_operations tmpfs_vnode_ops = {
-	.lookup = tmpfs_lookup,
-	.create = tmpfs_create,
-	.mkdir = tmpfs_mkdir,
+    .lookup = tmpfs_lookup,
+    .create = tmpfs_create,
+    .mkdir = tmpfs_mkdir,
+    .lookup_parent = tmpfs_lookup_parent, // 新增
 };
 
 // -------------------- tmpfs filesystem operations --------------------
 // 這個函式在掛載 tmpfs 時被 VFS 呼叫
-int tmpfs_setup_mount(struct filesystem* fs_info, struct mount* mount_info) {
+int tmpfs_setup_mount(struct filesystem* fs_info, struct mount* mount_info,struct vnode* logical_parent_of_mount_point) {
 	if (!fs_info || !mount_info) return E_INVAL;
 	uart_send_string("[tmpfs_setup_mount] Setting up mount for ");
 	uart_send_string(fs_info->name);
@@ -231,7 +260,17 @@ int tmpfs_setup_mount(struct filesystem* fs_info, struct mount* mount_info) {
 	// 	VFS 層面看到的 "/" 是透過 mount 結構的 root vnode 來表示的
 	tmpfs_inode_t* root_internal_node = create_tmpfs_internal_node("/", TMPFS_DIR, NULL);
 	if (!root_internal_node) return E_NOMEM;
-	
+	if (first_mount_fs){
+		first_mount_fs = 0; // 設定為 0，表示已經有第一個掛載了
+		root_internal_node->parent_dir_internal = NULL; // 根目錄沒有父目錄
+		uart_send_string("[tmpfs_setup_mount] This is the first mount, setting root internal node parent to NULL.\r\n");
+	} else {
+		tmpfs_inode_t* logical_parent_internal = (tmpfs_inode_t*)logical_parent_of_mount_point->internal;
+		root_internal_node->parent_dir_internal = logical_parent_internal; // 這裡可以指向自己，表示它是根目錄
+		uart_send_string("[tmpfs_setup_mount] Not the first mount, setting root internal node parent to\r\n");
+		uart_send_string(root_internal_node->parent_dir_internal->name);
+		uart_send_string("\r\n");
+	}
 	// 2. 建立 tmpfs 的根目錄的 vnode
 	struct vnode* root_vnode = create_tmpfs_vnode(mount_info, root_internal_node, VNODE_DIR);
 	if (!root_vnode) {

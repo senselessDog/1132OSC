@@ -49,6 +49,14 @@ int sys_kill(trap_frame_t *frame,int pid);
 //handler
 void (*sys_signal(int signal_num, void (*handler_addr)(int)))(int);
 void timer_disable(void);
+//file system
+int sys_open(const char* pathname, int flags);
+int sys_close(int fd);
+long sys_write(int fd, const void* user_buf, size_t count);
+long sys_read(int fd, void* user_buf, size_t count);
+int sys_mkdir(const char* pathname, int mode);
+int sys_mount(const char *src, const char *target, const char *filesystem, unsigned long flags);
+int sys_chdir(const char* path);
 // 特殊的 handler 值 (通常定義在全域)
 #define SIG_DFL ((void (*)(int))0)  // Default action
 #define SIG_IGN ((void (*)(int))1)  // Ignore signal

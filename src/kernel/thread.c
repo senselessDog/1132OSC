@@ -116,6 +116,23 @@ void thread_init_user(void* user_code_start_pa,void* thread_stack_alloc_kva) {
     }
     first_thread->is_handling_signal=0;
     first_thread->sigpending=0;
+    // 初始化 VFS 相關成員
+    if (rootfs && rootfs->root) {
+        first_thread->cwd = rootfs->root; // 新任務的 CWD 預設為根檔案系統的根
+        rootfs->root->ref_count++;      // 增加引用計數
+
+        first_thread->root_dir = rootfs->root; // 任務的根目錄也預設為 VFS 的根
+        rootfs->root->ref_count++;          // 增加引用計數
+    } else {
+        // 錯誤處理：rootfs 尚未初始化
+        first_thread->cwd = NULL;
+        first_thread->root_dir = NULL;
+        uart_send_string("CRITICAL: [thread_create] rootfs not initialized for new thread VFS members!\r\n");
+    }
+
+    for (int i = 0; i < MAX_PROCESS_OPEN_FILES; ++i) {
+        first_thread->fd_table[i] = NULL; // 清空檔案描述符表
+    }
     uart_send_string("First user initialized and Created.\r\n");
 }
 thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
@@ -165,6 +182,23 @@ thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {
     //SIGnal
     for (int i = 0; i < NSIG; i++) {
         new_thread->sighand[i] = SIG_DFL;
+    }
+    // 初始化 VFS 相關成員
+    if (rootfs && rootfs->root) {
+        new_thread->cwd = rootfs->root; // 新任務的 CWD 預設為根檔案系統的根
+        rootfs->root->ref_count++;      // 增加引用計數
+
+        new_thread->root_dir = rootfs->root; // 任務的根目錄也預設為 VFS 的根
+        rootfs->root->ref_count++;          // 增加引用計數
+    } else {
+        // 錯誤處理：rootfs 尚未初始化
+        new_thread->cwd = NULL;
+        new_thread->root_dir = NULL;
+        uart_send_string("CRITICAL: [thread_create] rootfs not initialized for new thread VFS members!\r\n");
+    }
+
+    for (int i = 0; i < MAX_PROCESS_OPEN_FILES; ++i) {
+        new_thread->fd_table[i] = NULL; // 清空檔案描述符表
     }
     return new_thread;
 }

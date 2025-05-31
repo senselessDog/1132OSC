@@ -311,3 +311,29 @@ char *strchr(const char *str, int c) {
 
     return NULL; // Character not found
 }
+
+char* strncpy(char *dest, const char *src, size_t n) {
+    size_t i;
+    for (i = 0; i < n && src[i] != '\0'; i++) {
+        dest[i] = src[i];
+    }
+    // 如果 src 的長度小於 n，用 '\0' 填充 dest 的剩餘部分
+    // for ( ; i < n; i++) {
+    //     dest[i] = '\0';
+    // }
+    // 為了安全，我們通常希望即使 n 用完了，也要確保 dest 有一個結尾的 null (如果空間允許)
+    // 但標準 strncpy 如果 src 長度 >= n，則不保證 null 結尾。
+    // 在你的使用情境中，你通常會在之後手動設定 dest[MAX_PATHNAME_LEN] = '\0'，所以這裡可以簡化。
+
+    // 實作一個更安全的版本，至少在 n > 0 時確保 dest 有 null 結尾（如果原始 src 較短）
+    // 或者在 n 耗盡前，如果 src 結束了，就補一個 null
+    if (i < n) { // src 比較短，或者剛好在第 n 個字元是 '\0'
+        dest[i] = '\0'; // 確保 null 結尾
+    }
+    // 如果 i == n 且 src[n-1] 不是 '\0'，那麼 dest 就沒有 null 結尾
+    // 這時需要調用者在外部處理，例如：
+    // manual_strncpy(buffer, source, MAX_LEN);
+    // buffer[MAX_LEN] = '\0'; // 或者 buffer[MAX_LEN-1] = '\0' 如果 MAX_LEN 是包含 null 的總長度
+
+    return dest;
+}

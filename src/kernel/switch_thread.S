@@ -109,6 +109,6 @@ change_ttbr0_el1:
 
 .global sigreturn_trampoline_entry
 sigreturn_trampoline_entry:
-    mov x8, #11
+    mov x8, #18
     svc 0
     ret
