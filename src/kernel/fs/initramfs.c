@@ -145,16 +145,6 @@ static int initramfs_lookup_parent(struct vnode* dir_node, struct vnode** target
     //     (*target_parent)->ref_count++;
     //     return E_OK;
     // }
-
-    // 預設或最後的防線：initramfs 根的 ".." 指向自己 (如果 dotdot_vnode 未設定)
-    // 或者非根目錄但沒有 parent_internal (不應該發生如果結構正確)
-    // 但根據助教的說法，initramfs 根的 ".." 行為由 dotdot_vnode 決定。
-    // 如果 dotdot_vnode 是 NULL (例如，它是全域 rootfs)，則指向自己。
-    // 對於 initramfs 內的子目錄，你需要一種方法來找到它們的父目錄。
-    // 目前的 initramfs_inode_t 沒有直接存父 initramfs_inode_t 指標，
-    // 這意味著 lookup_parent 對於 initramfs 內部的子目錄可能無法簡單實現。
-    // 簡化：假設這個 lookup_parent 主要用於處理根的 ".."。
-    // VFS 層的 ".." 處理會優先於這個。
     uart_send_string("Warning: [initramfs_lookup_parent] Reached fallback for '");
     uart_send_string(current_internal->name); uart_send_string("', '..' is itself.\r\n");
     *target_parent = dir_node;

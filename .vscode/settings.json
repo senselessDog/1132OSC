@@ -11,7 +11,8 @@
         "limits": "c",
         "new": "c",
         "uart.h": "c",
-        "locale_t.h": "c"
+        "locale_t.h": "c",
+        "thread.h": "c"
     },
     "makefile.configureOnOpen": false
 }

@@ -41,7 +41,10 @@ struct file_operations {
     // (選做，Basic 1 不強制，但 Advanced Exercise 2Framebuffer 會用到)
     // long (*lseek64)(struct file* file, long offset, int whence);
 };
-
+enum VNODE_TYPE {
+    VNODE_DIR,  // 或者你之前用的 VNODE_DIR
+    VNODE_FILE // 或者你之前用的 VNODE_FILE
+};
 // Vnode 操作集合 (對應 vnode_operations)
 struct vnode_operations {
     // 在 dir_node 目錄下尋找名為 component_name 的節點
@@ -65,10 +68,8 @@ struct vnode_operations {
     // 返回: 0 表示成功，錯誤碼 (負值) 表示失敗
     int (*mkdir)(struct vnode* dir_node, struct vnode** target, const char* component_name); //
     int (*lookup_parent)(struct vnode* dir_node, struct vnode** target_parent, struct vnode* task_root_node);
-};
-enum VNODE_TYPE {
-    VNODE_DIR,  // 或者你之前用的 VNODE_DIR
-    VNODE_FILE // 或者你之前用的 VNODE_FILE
+    int (*mknod)(struct vnode* dir_node, struct vnode** target, const char* component_name, enum VNODE_TYPE type,
+        struct file_operations* dev_fops, struct vnode_operations* dev_vops);
 };
 // VFS 中的節點 (vnode)
 struct vnode {
@@ -121,6 +122,8 @@ int vfs_mkdir(const char* pathname); //
 int vfs_mount(const char* target_path, const char* fs_name); // 類似於 vfs_mount(const char* target, const char* filesystem)
 int vfs_lookup(const char* pathname, struct vnode** target); //
 int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode* root_node, struct vnode** target);
+int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations* dev_fops, struct vnode_operations* dev_vops);
+
 // 輔助：錯誤碼 (可以定義更多)
 #define E_OK      0  // 成功
 #define E_PERM   -1  // Operation not permitted
@@ -141,6 +144,8 @@ int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode
 #define O_CREAT     00000100 // 八進制，用於建立檔案
 #define O_DIRECTORY 00200000 // 八進制，確保開啟的是目錄 (Linux 特有)
 #define O_RDWR  02   // Open for reading and writing
+#define O_RDONLY 00   // Open for reading only
+#define O_WRONLY 10   // Open for writing only
 
 #define MAX_REGISTERED_FS 8
 #define MAX_MOUNTED_FS 8 // 假設最多可以掛載8個檔案系統

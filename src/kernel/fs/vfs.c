@@ -228,6 +228,122 @@ int vfs_lookup(const char* pathname, struct vnode** target) {
     }
     return vfs_resolve_path(pathname, current_task->cwd, current_task->root_dir, target);
 }
+
+int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations* dev_fops, struct vnode_operations* dev_vops) {
+    uart_send_string("[vfs_mknod] Path: '"); uart_send_string(pathname);
+    uart_send_string("', Type: "); uart_send_int(type); uart_send_string("\r\n");
+
+    if (!pathname || !dev_fops) return -E_INVAL;
+    if (!rootfs || !rootfs->root) { // 確保全域根已掛載
+        uart_send_string("Error: [vfs_mknod] Rootfs not available.\r\n");
+        return -E_NOENT; // 或者一個更合適的早期錯誤
+    }
+
+    thread_t* current_task = get_current();
+    struct vnode* effective_cwd;
+    struct vnode* effective_root_dir;
+
+    if (current_task && current_task->cwd && current_task->root_dir) {
+        effective_cwd = current_task->cwd;
+        effective_root_dir = current_task->root_dir;
+        uart_send_string("[vfs_mknod] Using task's CWD & root_dir.\r\n");
+    } else {
+        // 無任務上下文，或任務 VFS 上下文未完全初始化 (例如核心初始化階段)
+        // 此時，路徑必須是絕對的，CWD 的概念是 rootfs->root
+        if (pathname[0] != '/') {
+            uart_send_string("Error: [vfs_mknod] No task context, pathname must be absolute: ");
+            uart_send_string(pathname); uart_send_string("\r\n");
+            return -E_INVAL;
+        }
+        effective_cwd = rootfs->root;      // 對於絕對路徑，CWD 在此不直接使用，但 resolve_path 會用到 base
+        effective_root_dir = rootfs->root; // 絕對路徑的起點
+        uart_send_string("[vfs_mknod] No/incomplete task context, using global rootfs for path resolution.\r\n");
+    }
+
+    // 1. 分離父目錄路徑和新節點名稱
+    char path_copy[MAX_PATHNAME_LEN + 1];
+    // manual_strncpy(path_copy, pathname, MAX_PATHNAME_LEN); // 改用你的 strncpy
+    // path_copy[MAX_PATHNAME_LEN] = '\0';
+    // 為簡化，假設 strncpy 來自 string.h
+    strncpy(path_copy, pathname, MAX_PATHNAME_LEN);
+    path_copy[MAX_PATHNAME_LEN] = '\0';
+
+
+    char* last_slash = strrchr(path_copy, '/');
+    char parent_dir_path_str[MAX_PATHNAME_LEN + 1]; // 改名以區分
+    const char* component_name;
+
+    if (last_slash) {
+        component_name = last_slash + 1;
+        if (strlen(component_name) == 0) { // 路徑以 '/' 結尾，例如 "/dev/"
+             uart_send_string("Error: [vfs_mknod] Component name cannot be empty (path ends with '/').\r\n");
+             return -E_INVAL;
+        }
+        if (last_slash == path_copy) { // e.g., "/devnode" (父目錄是 "/")
+            strncpy(parent_dir_path_str, "/", MAX_PATHNAME_LEN + 1);
+        } else { // e.g., "/some/dir/devnode"
+            *last_slash = '\0'; // path_copy 現在是父目錄字串
+            strncpy(parent_dir_path_str, path_copy, MAX_PATHNAME_LEN + 1);
+        }
+    } else { // e.g., "devnode" (相對於 effective_cwd)
+        component_name = path_copy;
+        if (strlen(component_name) == 0) {
+             uart_send_string("Error: [vfs_mknod] Component name is empty.\r\n");
+             return -E_INVAL;
+        }
+        // 父目錄是 "effective_cwd"，用 "." 表示
+        strncpy(parent_dir_path_str, ".", MAX_PATHNAME_LEN + 1);
+    }
+    // parent_dir_path_str[MAX_PATHNAME_LEN] = '\0'; // strncpy 應該處理，或手動確保
+
+    uart_send_string("[vfs_mknod] Parent path to resolve: '"); uart_send_string(parent_dir_path_str);
+    uart_send_string("', component to create: '"); uart_send_string(component_name); uart_send_string("'\r\n");
+
+
+    // 2. 解析父目錄
+    struct vnode* parent_dir_vnode = NULL;
+    int ret = vfs_resolve_path(parent_dir_path_str, effective_cwd, effective_root_dir, &parent_dir_vnode);
+    if (ret != E_OK) {
+        uart_send_string("Error: [vfs_mknod] Failed to resolve parent directory '");
+        uart_send_string(parent_dir_path_str); uart_send_string("'. Error: "); uart_send_int(ret); uart_send_string("\r\n");
+        return ret;
+    }
+
+    // 3. 檢查父目錄是否支援 mknod
+    if (parent_dir_vnode->type != VNODE_DIR) {
+        uart_send_string("Error: [vfs_mknod] Parent path '"); uart_send_string(parent_dir_path_str);
+        uart_send_string("' is not a directory.\r\n");
+        parent_dir_vnode->ref_count--;
+        return -E_NOTDIR;
+    }
+    if (!parent_dir_vnode->v_ops || !parent_dir_vnode->v_ops->mknod) {
+        uart_send_string("Error: [vfs_mknod] Filesystem for '"); uart_send_string(parent_dir_path_str);
+        uart_send_string("' does not support mknod.\r\n");
+        parent_dir_vnode->ref_count--;
+        return -E_PERM;
+    }
+
+    // 4. 呼叫底層檔案系統的 mknod
+    struct vnode* new_device_vnode = NULL;
+    ret = parent_dir_vnode->v_ops->mknod(parent_dir_vnode, &new_device_vnode, component_name, type, dev_fops, dev_vops);
+
+    parent_dir_vnode->ref_count--; // 釋放對父目錄 vnode 的引用 (來自 vfs_resolve_path)
+
+    if (ret == E_OK) {
+        uart_send_string("[vfs_mknod] Successfully created device node '");
+        uart_send_string(pathname); uart_send_string("'.\r\n");
+        // new_device_vnode 的 ref_count 是 1 (由底層 mknod 設定)
+        // 核心內部 vfs_mknod 函數通常不直接 "使用" 這個新節點，
+        // 而是為更高層（如 sys_mknod 或初始化程式碼）創建它。
+        // 如果沒有其他核心內部使用者，則減少引用。
+        new_device_vnode->ref_count--;
+    } else {
+        uart_send_string("Error: [vfs_mknod] Underlying FS mknod for '");
+        uart_send_string(component_name); uart_send_string("' failed. Error: ");
+        uart_send_int(ret); uart_send_string("\r\n");
+    }
+    return ret;
+}
 // --- VFS API 實作 ---
 int vfs_open(const char* pathname, int flags, struct file** target_file) {
 	if (!pathname || !target_file) return E_INVAL;

@@ -227,6 +227,7 @@ void run_user_vm(char *archive_kva_addr) {
     // The stack pointer SP_EL0 should point to the top of the allocated stack region.
     if (first_thread){
         thread_init_user((void*)user_base_pa,(void*)user_stack_kva);
+        uart_vfs_init();
     }
     if (first_thread){
         first_thread=0;

@@ -133,6 +133,7 @@ void thread_init_user(void* user_code_start_pa,void* thread_stack_alloc_kva) {
     for (int i = 0; i < MAX_PROCESS_OPEN_FILES; ++i) {
         first_thread->fd_table[i] = NULL; // 清空檔案描述符表
     }
+    change_tpidr(first_thread);
     uart_send_string("First user initialized and Created.\r\n");
 }
 thread_t *thread_create(void (*entry_point)(void), trap_frame_t *frame) {

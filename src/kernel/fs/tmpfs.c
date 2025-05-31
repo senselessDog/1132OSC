@@ -178,7 +178,66 @@ int tmpfs_lookup_parent(struct vnode* dir_node, struct vnode** target_parent, st
     }
     return E_NOENT; // 正常情況下不應該到這裡如果上面邏輯完整
 }
+static int tmpfs_mknod(struct vnode* dir_node, struct vnode** target, const char* component_name,
+	enum VNODE_TYPE type, struct file_operations* dev_fops, struct vnode_operations* dev_vops) {
+	uart_send_string("[tmpfs_mknod] Creating device node '"); uart_send_string(component_name);
+	uart_send_string("' in dir '"); uart_send_string(((tmpfs_inode_t*)dir_node->internal)->name);
+	uart_send_string("'\r\n");
 
+	if (!dir_node || !dir_node->internal || !target || !component_name || !dev_fops) {
+	return -E_INVAL; // dev_vops 可以是 NULL，但 dev_fops 必須有
+	}
+	tmpfs_inode_t* parent_internal = (tmpfs_inode_t*)dir_node->internal;
+
+	if (parent_internal->type != TMPFS_DIR) return -E_NOTDIR;
+
+	// 檢查是否已存在同名檔案/目錄 (與 tmpfs_create_common 類似)
+	struct vnode* existing_node = NULL;
+	if (tmpfs_lookup(dir_node, &existing_node, component_name) == E_OK) {
+	existing_node->ref_count--;
+	return -E_EXIST;
+	}
+	if (parent_internal->num_children >= TMPFS_MAX_DIR_ENTRIES) return -E_NOSPC;
+	if (strlen(component_name) > TMPFS_MAX_NAME_LEN) return -E_INVAL; // 或 E_NAMETOOLONG
+
+	// 1. 建立 tmpfs 內部節點
+	// 注意：tmpfs_inode_t 本身不儲存 f_ops/v_ops，這些是 vnode 的屬性
+	// type 參數來自 mknod 的 type，通常是 VNODE_FILE
+	tmpfs_inode_t* new_internal_node = create_tmpfs_internal_node(component_name, (type == VNODE_DIR ? TMPFS_DIR : TMPFS_FILE), NULL);
+	if (!new_internal_node) return -E_NOMEM;
+
+	// 如果 tmpfs_inode_t 需要標記它是一個特殊設備，可以在這裡做，但通常 VFS vnode 的 type 和 ops 更重要
+	// new_internal_node->is_device = 1; // 例如
+
+	// 2. 建立 vnode
+	struct vnode* new_vnode = create_tmpfs_vnode(dir_node->mount, new_internal_node, type);
+	if (!new_vnode) {
+	dynamic_free(new_internal_node);
+	return -E_NOMEM;
+	}
+
+	// !!! 關鍵：覆寫 f_ops 和 v_ops !!!
+	new_vnode->f_ops = dev_fops;
+	if (dev_vops) { // dev_vops 可以是 NULL，表示使用預設的（如果有的話）或不支援
+	new_vnode->v_ops = dev_vops;
+	} else {
+	// 可以選擇讓它指向一個通用的、操作受限的 v_ops，或者 tmpfs 預設的 v_ops
+	// 如果是設備檔案，其 v_ops->lookup/create/mkdir 通常應該返回錯誤
+	// 我們可以沿用 tmpfs_vnode_ops，但知道對於設備檔案，這些操作不適用
+	// 或者專門為設備設計一個簡化的 v_ops
+	new_vnode->v_ops = &tmpfs_vnode_ops; // 或一個更合適的 for device files
+	}
+	// new_vnode->type 已經在 create_tmpfs_vnode 中根據 internal_node->type 設定，
+	// 或者我們可以在這裡根據 mknod 傳入的 type 明確設定 vnode->type
+	new_vnode->type = type;
+
+
+	// 3. 將新節點加入父目錄
+	parent_internal->children[parent_internal->num_children++] = new_vnode;
+	*target = new_vnode; // new_vnode 的 ref_count 在 create_tmpfs_vnode 中已設為 1
+	uart_send_string("[tmpfs_mknod] Device node '"); uart_send_string(component_name); uart_send_string("' created.\r\n");
+	return E_OK;
+}
 int tmpfs_create_common(struct vnode* dir_node, struct vnode** target, const char* component_name, enum TMPFS_TYPE type, enum VNODE_TYPE v_type) {
 	if (!dir_node || !dir_node->internal || !target || !component_name) return E_INVAL;
 	tmpfs_inode_t* parent_internal = (tmpfs_inode_t*)dir_node->internal;
@@ -245,6 +304,7 @@ struct vnode_operations tmpfs_vnode_ops = {
     .create = tmpfs_create,
     .mkdir = tmpfs_mkdir,
     .lookup_parent = tmpfs_lookup_parent, // 新增
+	.mknod = tmpfs_mknod, // 新增
 };
 
 // -------------------- tmpfs filesystem operations --------------------
