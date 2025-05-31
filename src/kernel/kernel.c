@@ -283,6 +283,7 @@ void kernel_main(void *dtb_addr)
     // idle();
     //init rootfs
     kernel_init_vfs();
+    initramfs_init();   // 註冊 initramfs 檔案系統類型
     if (rootfs && rootfs->root) { // 確保根檔案系統已掛載
         // test_vfs_operations();
     } else {

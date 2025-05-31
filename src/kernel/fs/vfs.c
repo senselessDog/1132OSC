@@ -642,7 +642,7 @@ int vfs_mount(const char* target_path, const char* fs_name) {
 
     uart_send_string("[vfs_mount] Successfully mounted '");
     uart_send_string(fs_name); uart_send_string("' at '"); uart_send_string(target_path);
-    uart_send_string("'. mount_point_vnode: '");
+    uart_send_string("'. \r\nmount_point_vnode: '");
     if(new_mount->mount_point_vnode->internal) uart_send_string(((tmpfs_inode_t*)new_mount->mount_point_vnode->internal)->name);
     uart_send_string("', guest_root: '");
     if(new_mount->root->internal) uart_send_string(((tmpfs_inode_t*)new_mount->root->internal)->name);

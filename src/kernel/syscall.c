@@ -777,7 +777,7 @@ int sys_open(const char* pathname, int flags) {
     // 現在需要在當前任務的 fd_table 中分配一個 fd
     int fd = -1;
     for (int i = 0; i < MAX_PROCESS_OPEN_FILES; ++i) {
-        if (current_task->fd_table[i] = opened_file) {
+        if (current_task->fd_table[i] == opened_file) {
             fd = i;
             break;
         }
