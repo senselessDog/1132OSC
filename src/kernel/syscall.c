@@ -853,7 +853,7 @@ int sys_chdir(const char* path) {
     if (!current_task) return E_PERM;
 
     struct vnode* target_dir_vnode = NULL;
-    int ret = vfs_resolve_path(path, current_task->cwd, current_task->root_dir, &target_dir_vnode);
+    int ret = vfs_resolve_path(path, current_task->cwd, current_task->root_dir, &target_dir_vnode,0);
 
     if (ret != E_OK) {
         return ret;

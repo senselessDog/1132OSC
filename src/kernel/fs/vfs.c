@@ -96,7 +96,7 @@ struct filesystem* find_filesystem(const char* name) {
 // 新增一個內部路徑解析輔助函數
 // base_node: 相對路徑的起點 (通常是 cwd)
 // root_node: 絕對路徑的起點 (任務的 root_dir)
-int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode* root_node, struct vnode** target) {
+int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode* root_node, struct vnode** target,int resolve_flags) {
     if (!pathname || !target || !root_node) return E_INVAL;
     if (!base_node && pathname[0] != '/') return E_INVAL; // 相對路徑但沒有 base_node
 
@@ -127,7 +127,7 @@ int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode
         current_vnode = base_node; // 相對路徑從 CWD 開始
     }
     current_vnode->ref_count++; // 持有起始節點的引用
-
+	int is_last_component = 0; // 用來標記是否是最後一個組件
     char* next_component;
     while (*p != '\0') {
         // 跳過多餘的 '/'
@@ -140,6 +140,7 @@ int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode
             *separator = '\0';
             p = separator + 1;
         } else {
+			is_last_component= 1; // 標記為最後一個組件
             p += strlen(p); // 移動到字串末尾
         }
 
@@ -197,7 +198,8 @@ int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode
                 break;
             }
         }
-        if (jumped_mount) {
+        if (jumped_mount && (!is_last_component || !(resolve_flags & RESOLVE_NO_CROSS_MOUNT))){
+			// 如果是掛載點，並且不是最後一個組件，則跳到 guest root
             uart_send_string("[vfs_resolve_path] Crossing mount point from '");
             if (current_vnode->internal) uart_send_string(((tmpfs_inode_t*)current_vnode->internal)->name);
             uart_send_string("' to FS '"); uart_send_string(jumped_mount->fs->name);
@@ -218,15 +220,15 @@ int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode
     uart_send_string("'\r\n");
     return E_OK;
 }
-int vfs_lookup(const char* pathname, struct vnode** target) {
+int vfs_lookup(const char* pathname, struct vnode** target, int resolve_flags) {
     // 這個舊的 vfs_lookup 假設是從全域 rootfs 開始的絕對路徑查找
     // Basic 3 中，大部分查找應該基於任務的 cwd 和 root_dir
     thread_t* current_task = get_current();
     if (!current_task) { // 內核早期或特殊情況
         if (pathname[0] != '/') return E_INVAL; // 沒有 CWD 就只能是絕對路徑
-        return vfs_resolve_path(pathname, NULL, rootfs->root, target);
+        return vfs_resolve_path(pathname, NULL, rootfs->root, target,resolve_flags);
     }
-    return vfs_resolve_path(pathname, current_task->cwd, current_task->root_dir, target);
+    return vfs_resolve_path(pathname, current_task->cwd, current_task->root_dir, target,resolve_flags);
 }
 
 int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations* dev_fops, struct vnode_operations* dev_vops) {
@@ -302,7 +304,7 @@ int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations
 
     // 2. 解析父目錄
     struct vnode* parent_dir_vnode = NULL;
-    int ret = vfs_resolve_path(parent_dir_path_str, effective_cwd, effective_root_dir, &parent_dir_vnode);
+    int ret = vfs_resolve_path(parent_dir_path_str, effective_cwd, effective_root_dir, &parent_dir_vnode,0);
     if (ret != E_OK) {
         uart_send_string("Error: [vfs_mknod] Failed to resolve parent directory '");
         uart_send_string(parent_dir_path_str); uart_send_string("'. Error: "); uart_send_int(ret); uart_send_string("\r\n");
@@ -358,7 +360,7 @@ int vfs_open(const char* pathname, int flags, struct file** target_file) {
 
     struct vnode* node_to_open = NULL;
     // 使用 vfs_resolve_path 進行路徑解析
-    int ret = vfs_resolve_path(pathname, current_task->cwd, current_task->root_dir, &node_to_open);
+    int ret = vfs_resolve_path(pathname, current_task->cwd, current_task->root_dir, &node_to_open,0);
 
 	if (ret != E_OK) {
         if (ret == E_NOENT && (flags & O_CREAT)) {
@@ -401,7 +403,7 @@ int vfs_open(const char* pathname, int flags, struct file** target_file) {
                 parent_dir_vnode->ref_count++; // 手動增加引用，因為我們直接用了它
                 parent_ret = E_OK;
             } else {
-                parent_ret = vfs_resolve_path(parent_path_buffer, current_task->cwd, current_task->root_dir, &parent_dir_vnode);
+                parent_ret = vfs_resolve_path(parent_path_buffer, current_task->cwd, current_task->root_dir, &parent_dir_vnode,0);
             }
 
             if (parent_ret != E_OK) {
@@ -572,12 +574,12 @@ int vfs_mkdir(const char* pathname) {
 	if (last_slash) {
 		if (last_slash == path_copy && *(last_slash+1) != '\0') { // e.g., "/newdir"
 			dirname_to_create = last_slash + 1;
-			int lookup_ret = vfs_lookup("/", &parent_dir_vnode);
+			int lookup_ret = vfs_lookup("/", &parent_dir_vnode,0);
 			if(lookup_ret != E_OK) return lookup_ret;
 		} else if (last_slash != path_copy) { // e.g., "/existing_dir/newdir"
 			dirname_to_create = last_slash + 1;
 			*last_slash = '\0'; // path_copy is now parent dir path
-			int lookup_ret = vfs_lookup(path_copy, &parent_dir_vnode);
+			int lookup_ret = vfs_lookup(path_copy, &parent_dir_vnode,0);
 			if(lookup_ret != E_OK) return lookup_ret;
 		} else { // e.g. "/"
 			return E_EXIST; // Cannot mkdir "/"
@@ -641,7 +643,7 @@ int vfs_mount(const char* target_path, const char* fs_name) {
     // vfs_lookup 應該使用 vfs_resolve_path，它需要 cwd 和 root_dir
     // 如果是在內核初始化時掛載 rootfs，vfs_lookup 可能有特殊處理或直接調用 setup_mount
     // 這裡我們假設 vfs_lookup 能正確工作
-    int ret = vfs_lookup(target_path, &host_vnode); // vfs_lookup 內部會調用 vfs_resolve_path
+    int ret = vfs_lookup(target_path, &host_vnode,1); // vfs_lookup 內部會調用 vfs_resolve_path
     if (ret != E_OK) {
         uart_send_string("[vfs_mount] Target path lookup failed for '");
         uart_send_string(target_path); uart_send_string("': ");
@@ -841,7 +843,7 @@ void test_vfs_operations() {
 
     // 測試 lookup 一個不存在的檔案
     struct vnode* non_existent_vnode = NULL;
-    int lookup_ret = vfs_lookup("/mydir/nosuchfile.txt", &non_existent_vnode);
+    int lookup_ret = vfs_lookup("/mydir/nosuchfile.txt", &non_existent_vnode,0);
     uart_send_string("[Test B1] vfs_lookup for non-existent file returned ");
     uart_send_int(lookup_ret);
     uart_send_string(" (expected E_NOENT = ");
@@ -854,7 +856,7 @@ void test_vfs_operations() {
 
     // 測試 lookup 已存在的檔案
     struct vnode* existent_vnode = NULL;
-    lookup_ret = vfs_lookup("/mydir/test.txt", &existent_vnode);
+    lookup_ret = vfs_lookup("/mydir/test.txt", &existent_vnode,0);
     uart_send_string("[Test B1] vfs_lookup for existent file returned ");
     uart_send_int(lookup_ret);
     uart_send_string(" (expected E_OK = ");

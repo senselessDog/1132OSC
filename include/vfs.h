@@ -120,8 +120,8 @@ int vfs_write(struct file* file, const void* buf, size_t len); //
 int vfs_read(struct file* file, void* buf, size_t len); //
 int vfs_mkdir(const char* pathname); //
 int vfs_mount(const char* target_path, const char* fs_name); // 類似於 vfs_mount(const char* target, const char* filesystem)
-int vfs_lookup(const char* pathname, struct vnode** target); //
-int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode* root_node, struct vnode** target);
+int vfs_lookup(const char* pathname, struct vnode** target,int resolve_flag); //
+int vfs_resolve_path(const char* pathname, struct vnode* base_node, struct vnode* root_node, struct vnode** target,int resolve_flag);
 int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations* dev_fops, struct vnode_operations* dev_vops);
 
 // 輔助：錯誤碼 (可以定義更多)
@@ -150,6 +150,8 @@ int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations
 #define MAX_REGISTERED_FS 8
 #define MAX_MOUNTED_FS 8 // 假設最多可以掛載8個檔案系統
 
+#define RESOLVE_DEFAULT        0x00 // 預設行為，跨越掛載點
+#define RESOLVE_NO_CROSS_MOUNT 0x01 // 在最後一個組件不跨越掛載點
 //Lab7 basic:3
 #define MAX_PROCESS_OPEN_FILES 16
 extern struct mount* mounted_fs_list[MAX_MOUNTED_FS];
