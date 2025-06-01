@@ -417,7 +417,7 @@ int sys_fork(trap_frame_t *frame) {
 }
 
 void sys_exit(trap_frame_t *frame) {
-    user_thread_exit(frame,NULL);
+    user_thread_exit(frame,-1);
     uart_send_string("[sys_exit]frame->elr_el1: ");
     uart_send_hex(frame->elr_el1);
     uart_send_string("\r\n");

@@ -12,7 +12,8 @@
         "new": "c",
         "uart.h": "c",
         "locale_t.h": "c",
-        "thread.h": "c"
+        "thread.h": "c",
+        "tmpfs.h": "c"
     },
     "makefile.configureOnOpen": false
 }

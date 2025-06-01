@@ -12,7 +12,7 @@ void user_idle(trap_frame_t *frame) {
 }
 void user_thread_exit(trap_frame_t *frame,int thread_id) {
     thread_t * delete_thread;
-    if (thread_id==NULL) { // Delete current thread
+    if (thread_id==-1) { // Delete current thread
         delete_thread = get_current();
     }else{ //kill others
         thread_t * current = run_queue;
@@ -29,7 +29,7 @@ void user_thread_exit(trap_frame_t *frame,int thread_id) {
         uart_send_string("  ttbr0_el1 (user PGD PA):   0x"); uart_send_hex(frame->ttbr0_el1); uart_send_string("\r\n");
         uart_send_string("  tpidr_el1 (thread ptr):    0x"); uart_send_hex(frame->tpidr_el1); uart_send_string("\r\n");
         // uart_send_string("  x0 (return value):         0x"); uart_send_hex(frame->trap_frame.x0); uart_send_string("\r\n");
-        uart_send_string("[sys_fork] ------------------------------------------\r\n");
+        uart_send_string("[user_thread_exit] ------------------------------------------\r\n");
         uart_send_string("[user_thread_exit] Thread ID: ");
         uart_send_int(delete_thread->id);
         uart_send_string(" exiting.\r\n");

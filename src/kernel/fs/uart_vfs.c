@@ -6,26 +6,18 @@
 #include "tmpfs.h"
 struct file_operations uart_dev_file_ops;
 void uart_vfs_init(void){
-    uart_send_string("Creating /dev directory...\r\n");
+    uart_send_string("[uart_vfs_init]Creating /dev directory...\r\n");
     int mkdir_dev_ret = vfs_mkdir("/dev"); // 這裡的 vfs_mkdir 內部會使用 vfs_resolve_path
     if (mkdir_dev_ret != E_OK && mkdir_dev_ret != -E_EXIST) {
         uart_send_string("Failed to create /dev directory: "); uart_send_int(mkdir_dev_ret); uart_send_string("\r\n");
     } else {
-        uart_send_string("/dev directory created or exists.\r\n");
-        uart_send_string("Attempting to mknod /dev/uart...\r\n");
-
-        // 呼叫 vfs_mknod 來創建設備節點
-        // type: VNODE_FILE (或者你定義的 VNODE_CHAR_DEVICE)
-        // dev_vops: 對於簡單的設備檔案，其 vnode 操作可能不多，可以傳 NULL
-        //           或者傳遞一個只實現了少量必要操作（如 lookup_parent 若被 VFS 層依賴）的 ops。
-        //           如果傳 NULL，tmpfs_mknod 中需要處理這種情況，例如賦予一個預設的受限 v_ops。
-        //           為了簡單，我們先假設 tmpfs_mknod 會賦予它 tmpfs_vnode_ops，儘管這不完美。
-        //           更理想的是有一個專門的 devfile_vnode_ops。
+        // uart_send_string("/dev directory created or exists.\r\n");
+        uart_send_string("[uart_vfs_init]Attempting to mknod /dev/uart...\r\n");
         int mknod_ret = vfs_mknod("/dev/uart", VNODE_FILE, &uart_dev_file_ops, &tmpfs_vnode_ops); // 使用 uart_dev_vnode_ops
         if (mknod_ret != E_OK) {
             uart_send_string("Failed to mknod /dev/uart: "); uart_send_int(mknod_ret); uart_send_string("\r\n");
         } else {
-            uart_send_string("/dev/uart device node created successfully via vfs_mknod.\r\n");
+            uart_send_string("[uart_vfs_init]/dev/uart device node created successfully via vfs_mknod.\r\n");
             register_uart_device(); // 假設這個函數會註冊 UART 設備到 VFS
         }
         

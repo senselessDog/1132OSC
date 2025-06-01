@@ -233,6 +233,8 @@ void run_user_vm(char *archive_kva_addr) {
         first_thread=0;
         switch_to_el0_vm(user_pgd_pa, (void*)USER_CODE_VA, (void*)USER_STACK_TOP_VA);
     }else{
+        //not init task
+        register_uart_device();
         thread_t * current_thread=get_current();
         current_thread->thread_stack_alloc_kva=user_stack_kva;
         current_thread->user_code_start_pa=user_base_pa;
@@ -379,7 +381,7 @@ void handle_page_fault(trap_frame_t *frame) {
         uart_send_string(" at VA 0x"); uart_send_hex(fault_va);
         uart_send_string("\r\nESR_EL1: 0x"); uart_send_hex(esr_el1); uart_send_string("\r\n");
         
-        user_thread_exit(frame,NULL);
+        user_thread_exit(frame,-1);
         // 在真實系統中，這裡會呼叫 schedule()，並且這個行程不會再被執行
         // 這裡我們模擬，讓它在 eret 後可能再次 trap 或進入一個安全迴圈
         // 或者，如果你的 syscall 有 exit，可以呼叫類似 sys_exit 的邏輯

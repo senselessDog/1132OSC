@@ -3,6 +3,7 @@ define kernel
   target remote :1234
   # b vfs_open
   b vfs_mknod
+  b user_thread_exit
 end
 
 define user
