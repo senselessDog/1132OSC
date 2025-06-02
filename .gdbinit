@@ -2,8 +2,9 @@ define kernel
   file kernel8.elf
   target remote :1234
   # b vfs_open
-  b vfs.c:658
-  b tmpfs_create_common
+  #b vfs.c:658
+  #b tmpfs_create_common
+  b uart_dev_write
 end
 
 define user

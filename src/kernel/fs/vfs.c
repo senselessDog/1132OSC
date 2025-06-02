@@ -226,6 +226,8 @@ int vfs_lookup(const char* pathname, struct vnode** target, int resolve_flags) {
     thread_t* current_task = get_current();
     if (!current_task) { // 內核早期或特殊情況
         if (pathname[0] != '/') return E_INVAL; // 沒有 CWD 就只能是絕對路徑
+		uart_send_string("[vfs_lookup] Using global rootfs for path: '");
+		uart_send_string(pathname); uart_send_string("'\r\n");
         return vfs_resolve_path(pathname, NULL, rootfs->root, target,resolve_flags);
     }
     return vfs_resolve_path(pathname, current_task->cwd, current_task->root_dir, target,resolve_flags);
@@ -570,7 +572,9 @@ int vfs_mkdir(const char* pathname) {
 	char* last_slash = strrchr(path_copy, '/');
 	struct vnode* parent_dir_vnode = NULL;
 	const char* dirname_to_create = NULL;
-
+	// uart_send_string("[vfs_mkdir] last_slash ='");
+	// uart_send_string(last_slash);
+	// uart_send_string("'\r\n");
 	if (last_slash) {
 		if (last_slash == path_copy && *(last_slash+1) != '\0') { // e.g., "/newdir"
 			dirname_to_create = last_slash + 1;

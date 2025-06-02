@@ -283,6 +283,7 @@ void kernel_main(void *dtb_addr)
     // idle();
     //init rootfs
     kernel_init_vfs();
+    change_tpidr(NULL); // 設定 tpidr_el1 為 NULL，表示使用 kernel thread 的 tpidr
     initramfs_init();   // 註冊 initramfs 檔案系統類型
     // uart_vfs_init();
     if (rootfs && rootfs->root) { // 確保根檔案系統已掛載

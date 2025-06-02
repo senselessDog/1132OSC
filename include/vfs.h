@@ -143,9 +143,9 @@ int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations
 
 #define O_CREAT     00000100 // 八進制，用於建立檔案
 #define O_DIRECTORY 00200000 // 八進制，確保開啟的是目錄 (Linux 特有)
-#define O_RDWR  02   // Open for reading and writing
-#define O_RDONLY 00   // Open for reading only
-#define O_WRONLY 10   // Open for writing only
+#define O_RDWR  2   // Open for reading and writing
+#define O_RDONLY 0   // Open for reading only
+#define O_WRONLY 1   // Open for writing only
 
 #define MAX_REGISTERED_FS 8
 #define MAX_MOUNTED_FS 8 // 假設最多可以掛載8個檔案系統
