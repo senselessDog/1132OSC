@@ -57,6 +57,9 @@ long sys_read(int fd, void* user_buf, size_t count);
 int sys_mkdir(const char* pathname, int mode);
 int sys_mount(const char *src, const char *target, const char *filesystem, unsigned long flags);
 int sys_chdir(const char* path);
+long sys_lseek64(int fd, long offset, int whence);
+int sys_ioctl(int fd, unsigned long request, void* argp) ;
+void sys_sigreturn(trap_frame_t *current_handler_frame);
 // 特殊的 handler 值 (通常定義在全域)
 #define SIG_DFL ((void (*)(int))0)  // Default action
 #define SIG_IGN ((void (*)(int))1)  // Ignore signal

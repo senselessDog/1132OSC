@@ -2,6 +2,7 @@
 #include<syscall.h>
 #include "buddy_alloc.h"
 #include "mmu.h"
+#include "uart.h"
 int check_signals(trap_frame_t *frame) {
     thread_t *current = get_current();
     uint32_t pending_signals = current->sigpending;

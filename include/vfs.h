@@ -38,8 +38,8 @@ struct file_operations {
     // 返回: 0 表示成功，錯誤碼 (負值) 表示失敗
     int (*close)(struct file* file); //
 
-    // (選做，Basic 1 不強制，但 Advanced Exercise 2Framebuffer 會用到)
-    // long (*lseek64)(struct file* file, long offset, int whence);
+    long (*lseek64)(struct file* file, long offset, int whence);
+    int (*ioctl)(struct file* file, unsigned long request, void* argp);
 };
 enum VNODE_TYPE {
     VNODE_DIR,  // 或者你之前用的 VNODE_DIR
@@ -138,6 +138,7 @@ int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations
 #define E_FBIG   -27 // File too large
 #define E_NOSPC  -28 // No space left on device
 #define E_ROFS   -30 // Read-only file system
+#define E_NODEV  -31 // No such device
 //basic 2
 #define E_BUSY   -16 // Device or resource busy
 

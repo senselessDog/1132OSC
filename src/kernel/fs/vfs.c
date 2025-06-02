@@ -550,11 +550,11 @@ int vfs_write(struct file* file_to_write, const void* buf, size_t len) {
 	// 權限檢查
 	// if (!(file_to_write->flags & O_WRONLY) && !(file_to_write->flags & O_RDWR)) return E_ACCESS_DENIED;
 
-	uart_send_string("[vfs_write] for vnode '");
-	uart_send_string(((tmpfs_inode_t*)file_to_write->vnode->internal)->name);
-	uart_send_string("', len ");
-	uart_send_int(len);
-	uart_send_string("\r\n");
+	// uart_send_string("[vfs_write] for vnode '");
+	// uart_send_string(((tmpfs_inode_t*)file_to_write->vnode->internal)->name);
+	// uart_send_string("', len ");
+	// uart_send_int(len);
+	// uart_send_string("\r\n");
 	return file_to_write->f_ops->write(file_to_write, buf, len);
 }
 

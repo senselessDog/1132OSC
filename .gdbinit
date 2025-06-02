@@ -4,7 +4,9 @@ define kernel
   # b vfs_open
   #b vfs.c:658
   #b tmpfs_create_common
-  b uart_dev_write
+  b sys_ioctl
+  # b sys_lseek64
+  # b vfs_write
 end
 
 define user

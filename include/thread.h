@@ -74,7 +74,9 @@ typedef struct thread{
 #define SYS_MKDIR       15
 #define SYS_MOUNT       16
 #define SYS_CHDIR       17
-#define SYS_SIGRETURN   18
+#define SYS_LSEEK64     18
+#define SYS_IOCTL       19
+#define SYS_SIGRETURN   20
 // Add more if needed, e.g., for signals later
 
 // Thread management functions

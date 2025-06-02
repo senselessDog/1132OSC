@@ -8,6 +8,7 @@
 #include "mailbox.h"
 #include "task_queue.h"
 #include "tmpfs.h"
+#include "fs/specialFile_vfs.h"
 extern uint64_t g_initramfs_addr;
 int should_run_task_queue = 0;
 // System call handler function
@@ -182,6 +183,16 @@ void handle_syscall(uint64_t kernel_sp) {
                 user_path_chdir[MAX_PATHNAME_LEN] = '\0';
                 frame->x0 = sys_chdir(user_path_chdir);
             }
+            break;
+        case SYS_LSEEK64: // syscall number 18 [cite: 202]
+            // arg0: fd, arg1: offset, arg2: whence
+            frame->x0 = sys_lseek64((int)arg0, (long)arg1, (int)arg2);
+            break;
+
+        case SYS_IOCTL:   // syscall number 19 [cite: 203]
+            // arg0: fd, arg1: request, arg2: ... (argp, 指向用戶空間數據的指標)
+            // 變長參數的處理比較棘手，通常 sys_ioctl 會直接接收 arg2 作為 void*
+            frame->x0 = sys_ioctl((int)arg0, (unsigned long)arg1, (void*)arg2);
             break;
         case SYS_SIGRETURN:
             // 此 system call 通常沒有參數，或者參數是隱含的 (trap frame)
@@ -396,12 +407,17 @@ int sys_fork(trap_frame_t *frame) {
             child->fd_table[i]->vnode->ref_count++;
             uart_send_string("[sys_fork] Copied fd "); uart_send_int(i);
             uart_send_string(" to child, vnode '");
-            uart_send_string(child->fd_table[i]->vnode);
+            uart_send_hex(child->fd_table[i]->vnode);
             uart_send_string("' ref_count now "); uart_send_int(child->fd_table[i]->vnode->ref_count);
             uart_send_string("\r\n");
         } else {
             child->fd_table[i] = NULL;
         }
+    }
+    if (framebuffer_init(1024, 768, 32)==0) {
+        uart_send_string("[sys_fork] Framebuffer initialized successfully.\r\n");
+    } else {
+        uart_send_string("[sys_fork] Framebuffer initialization failed.\r\n");
     }
     // Then print from child_thread->trap_frame
     uart_send_string("[sys_fork] ---- Child's Target Trap Frame Values ----\r\n");
@@ -876,6 +892,36 @@ int sys_chdir(const char* path) {
     }
     uart_send_string("'\r\n");
     return E_OK;
+}
+// 實現 sys_lseek64 和 sys_ioctl
+long sys_lseek64(int fd, long offset, int whence) {
+    thread_t* current_task = get_current();
+    if (!current_task) return -E_PERM;
+    if (fd < 0 || fd >= MAX_PROCESS_OPEN_FILES || current_task->fd_table[fd] == NULL) {
+        return -E_BADF;
+    }
+    struct file* f = current_task->fd_table[fd];
+    if (!f->f_ops || !f->f_ops->lseek64) {
+        return -E_INVAL; // 或 -E_SPIPE (Illegal seek)
+    }
+    return f->f_ops->lseek64(f, offset, whence);
+}
+
+int sys_ioctl(int fd, unsigned long request, void* argp) {
+    thread_t* current_task = get_current();
+    if (!current_task) return -E_PERM;
+    if (fd < 0 || fd >= MAX_PROCESS_OPEN_FILES || current_task->fd_table[fd] == NULL) {
+        return -E_BADF;
+    }
+    struct file* f = current_task->fd_table[fd];
+    if (!f->f_ops || !f->f_ops->ioctl) {
+        return -E_INVAL; // 或 -E_NOTTY (Not a typewriter - ioctl not appropriate)
+    }
+
+    // 警告：argp 是使用者空間指標，實際操作時需要小心處理
+    // copy_from_user / copy_to_user，或者確保傳遞給 f_ops->ioctl 的是安全的核心指標
+    // 在 fb_dev_ioctl 中，我們假設了 argp 可以被 memcpy，這在沒有 MMU 或寬鬆 MMU 時可能暫時可行
+    return f->f_ops->ioctl(f, request, argp);
 }
 void sys_sigreturn(trap_frame_t *current_handler_frame) {
     thread_t *current = get_current();

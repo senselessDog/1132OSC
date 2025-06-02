@@ -5,11 +5,18 @@
 #include "thread.h"
 #include "tmpfs.h"
 struct file_operations uart_dev_file_ops;
-void uart_vfs_init(void){
-    uart_send_string("[uart_vfs_init]Creating /dev directory...\r\n");
+void mkdir_dev(void){
     int mkdir_dev_ret = vfs_mkdir("/dev"); // 這裡的 vfs_mkdir 內部會使用 vfs_resolve_path
     if (mkdir_dev_ret != E_OK && mkdir_dev_ret != -E_EXIST) {
         uart_send_string("Failed to create /dev directory: "); uart_send_int(mkdir_dev_ret); uart_send_string("\r\n");
+    }
+}
+void uart_vfs_init(void){
+    uart_send_string("[uart_vfs_init]lookup /dev directory...\r\n");
+    struct vnode* target_vnode = NULL;
+    int dev_ret = vfs_lookup("/dev",&target_vnode,0);
+    if (dev_ret != E_OK && dev_ret != -E_EXIST) {
+        uart_send_string("Failed to lookup /dev directory: "); uart_send_int(dev_ret); uart_send_string("\r\n");
     } else {
         // uart_send_string("/dev directory created or exists.\r\n");
         uart_send_string("[uart_vfs_init]Attempting to mknod /dev/uart...\r\n");

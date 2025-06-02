@@ -13,7 +13,9 @@
         "uart.h": "c",
         "locale_t.h": "c",
         "thread.h": "c",
-        "tmpfs.h": "c"
+        "tmpfs.h": "c",
+        "strcmp.h": "c",
+        "vfs.h": "c"
     },
     "makefile.configureOnOpen": false
 }
