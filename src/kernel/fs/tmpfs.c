@@ -194,8 +194,8 @@ static int tmpfs_mknod(struct vnode* dir_node, struct vnode** target, const char
 	// 檢查是否已存在同名檔案/目錄 (與 tmpfs_create_common 類似)
 	struct vnode* existing_node = NULL;
 	if (tmpfs_lookup(dir_node, &existing_node, component_name) == E_OK) {
-	existing_node->ref_count--;
-	return -E_EXIST;
+		existing_node->ref_count--;
+		return -E_EXIST;
 	}
 	if (parent_internal->num_children >= TMPFS_MAX_DIR_ENTRIES) return -E_NOSPC;
 	if (strlen(component_name) > TMPFS_MAX_NAME_LEN) return -E_INVAL; // 或 E_NAMETOOLONG
@@ -219,13 +219,9 @@ static int tmpfs_mknod(struct vnode* dir_node, struct vnode** target, const char
 	// !!! 關鍵：覆寫 f_ops 和 v_ops !!!
 	new_vnode->f_ops = dev_fops;
 	if (dev_vops) { // dev_vops 可以是 NULL，表示使用預設的（如果有的話）或不支援
-	new_vnode->v_ops = dev_vops;
+		new_vnode->v_ops = dev_vops;
 	} else {
-	// 可以選擇讓它指向一個通用的、操作受限的 v_ops，或者 tmpfs 預設的 v_ops
-	// 如果是設備檔案，其 v_ops->lookup/create/mkdir 通常應該返回錯誤
-	// 我們可以沿用 tmpfs_vnode_ops，但知道對於設備檔案，這些操作不適用
-	// 或者專門為設備設計一個簡化的 v_ops
-	new_vnode->v_ops = &tmpfs_vnode_ops; // 或一個更合適的 for device files
+		new_vnode->v_ops = &tmpfs_vnode_ops; // 或一個更合適的 for device files
 	}
 	// new_vnode->type 已經在 create_tmpfs_vnode 中根據 internal_node->type 設定，
 	// 或者我們可以在這裡根據 mknod 傳入的 type 明確設定 vnode->type

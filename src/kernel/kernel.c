@@ -285,7 +285,9 @@ void kernel_main(void *dtb_addr)
     kernel_init_vfs();
     change_tpidr(NULL); // 設定 tpidr_el1 為 NULL(表示未使用thread)
     initramfs_init();   // 註冊 initramfs 檔案系統類型
+    //for special device
     mkdir_dev();
+    uart_vfs_init();
     framebuffer_vfs_init();
     // uart_vfs_init();
     if (rootfs && rootfs->root) { // 確保根檔案系統已掛載

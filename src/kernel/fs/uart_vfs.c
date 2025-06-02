@@ -25,7 +25,7 @@ void uart_vfs_init(void){
             uart_send_string("Failed to mknod /dev/uart: "); uart_send_int(mknod_ret); uart_send_string("\r\n");
         } else {
             uart_send_string("[uart_vfs_init]/dev/uart device node created successfully via vfs_mknod.\r\n");
-            register_uart_device(); // 假設這個函數會註冊 UART 設備到 VFS
+            
         }
         
     }

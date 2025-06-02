@@ -261,7 +261,8 @@ int vfs_mknod(const char* pathname, enum VNODE_TYPE type, struct file_operations
         }
         effective_cwd = rootfs->root;      // 對於絕對路徑，CWD 在此不直接使用，但 resolve_path 會用到 base
         effective_root_dir = rootfs->root; // 絕對路徑的起點
-        uart_send_string("[vfs_mknod] No/incomplete task context, using global rootfs for path resolution.\r\n");
+        uart_send_string("[vfs_mknod] No/incomplete task context\r\n");
+        uart_send_string("[vfs_mknod] Using global rootfs as effective CWD and root_dir.\r\n");
     }
 
     // 1. 分離父目錄路徑和新節點名稱

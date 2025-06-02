@@ -49,7 +49,7 @@ typedef struct initramfs_inode {
 // 函數原型宣告
 void initramfs_init(void); // 註冊檔案系統
 int initramfs_setup_mount(struct filesystem* fs, struct mount* mount, struct vnode* logical_parent_of_mount_point);
-
+static struct vnode* initramfs_add_node_recursive(struct mount* mount_info, initramfs_inode_t* root_internal_of_initramfs, const char* fullpath, enum VNODE_TYPE type, const char* data_ptr, size_t file_size);
 // VFS 操作函數集 (將在 .c 檔案中定義)
 extern struct file_operations initramfs_file_ops;
 extern struct vnode_operations initramfs_vnode_ops;

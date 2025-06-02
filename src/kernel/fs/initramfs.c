@@ -25,19 +25,6 @@ void initramfs_init (void){
             uart_send_string("Failed to mount initramfs_cpio on /initramfs, error: "); uart_send_int(mount_ret); uart_send_string("\r\n");
         } else {
             uart_send_string("initramfs_cpio mounted successfully on /initramfs.\r\n");
-
-            // // 測試一下 (可選)
-            // struct vnode* test_node = NULL;
-            // int lookup_ret = vfs_lookup("/initramfs/your_file_in_cpio.txt", &test_node);
-            // if (lookup_ret == E_OK) {
-            //     uart_send_string("Lookup test successful for /initramfs/your_file_in_cpio.txt. Name: ");
-            //     uart_send_string( ((initramfs_inode_t*)test_node->internal)->name );
-            //     uart_send_string("\r\n");
-            //     test_node->ref_count--; // 釋放 lookup 得到的引用
-            // } else {
-            //     uart_send_string("Lookup test failed for /initramfs/your_file_in_cpio.txt, error: ");
-            //     uart_send_int(lookup_ret); uart_send_string("\r\n");
-            // }
         }
     }
 }
